@@ -34,11 +34,11 @@ It has the following expression kinds:
 Two functions are builtin: `read()` which returns a decimal integer read from stdin and `write(i)` which writes the given integer (and a newline) to stdout.
 
 The intlang compiler is a toy in multiple aspects:
-- It has few safety checks (see [Safety checks](#markdown-header-safety-checks))
+- It has few safety checks (see [Safety checks](#safety-checks))
 - Besides telling you that it could not lex / parse / assemble the program there are no helpful error messages
 - It does not optimize the generated code at all resulting in hideous (and slow) assembly
 - It doesn't have a register allocation algorithm and thus makes excessive use of the stack
-- It only runs on one platform / architecture (see [Supported Systems](#markdown-header-supported-systems))
+- It only runs on one platform / architecture (see [Supported Systems](#supported-systems))
 
 ## Safety checks
 There are barely any.
