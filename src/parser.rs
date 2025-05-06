@@ -160,14 +160,6 @@ fn expression_parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], Expressi
                     .clone()
                     .delimited_by(just(Lexeme::OpenBrace), just(Lexeme::CloseBrace)),
                 select! {Lexeme::Ident(name) => Expression::Variable(name)},
-                select! {Lexeme::Ident(name) => name}
-                    .then(
-                        expression_parser
-                            .separated_by(just(Lexeme::Comma))
-                            .allow_trailing()
-                            .collect(),
-                    )
-                    .map(|(name, arguments)| Expression::FunctionCall(name, arguments)),
                 select! {Lexeme::Literal(num) => Expression::Literal(num)},
             ))
         }
