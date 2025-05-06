@@ -37,7 +37,7 @@ pub struct Function<'src> {
 fn function_parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], Function<'src>> + Clone {
     just(Lexeme::Fn)
         .ignore_then(
-            select! {Lexeme::Ident(param) => param}.then(
+            select! {Lexeme::Ident(name) => name}.then(
                 select! {Lexeme::Ident(param) => param}
                     .separated_by(just(Lexeme::Comma))
                     .allow_trailing()
