@@ -5,9 +5,9 @@ Intlang is a toy programming language.
 It's only datatype is the 64 bit signed integer.
 
 ## Language structure
-An Intlang program is made of functions with names and a optionally paramters.
+An Intlang program is made of functions with names and optionally parameters.
 
-These Functions contain statements.
+These functions contain statements.
 
 The syntax is C-like.
 
