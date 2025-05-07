@@ -440,16 +440,17 @@ intlang_{name}:
                 );
             }
             Expression::Div(dividend, divisor) => {
-                self.generate_expression(divisor);
+                self.generate_expression(dividend);
                 self.generate_intermediate_save();
                 self.intermediate_counter += 1;
-                self.generate_expression(dividend);
+                self.generate_expression(divisor);
                 self.intermediate_counter -= 1;
                 let offset = self.get_intermediate_offset();
                 let _ = write!(
                     self.content,
                     r"
     mov rsi, [rbp-{offset}]
+    xchg rax, rsi
     cqo
     idiv rsi
 ",
@@ -567,9 +568,10 @@ intlang_{name}:
 
             Expression::LessThen(first, second) => gen_double(
                 self,
-                first,
                 second,
+                first,
                 r"
+    xchg rax, rdx
     mov rsi, rax
     xor eax, eax
     cmp rsi, rdx
@@ -579,9 +581,10 @@ intlang_{name}:
 
             Expression::LessThenOrEqualTo(first, second) => gen_double(
                 self,
-                first,
                 second,
+                first,
                 r"
+    xchg rax, rdx
     mov rsi, rax
     xor eax, eax
     cmp rsi, rdx
@@ -591,9 +594,10 @@ intlang_{name}:
 
             Expression::GreaterThen(first, second) => gen_double(
                 self,
-                first,
                 second,
+                first,
                 r"
+    xchg rax, rdx
     mov rsi, rax
     xor eax, eax
     cmp rsi, rdx
@@ -603,9 +607,10 @@ intlang_{name}:
 
             Expression::GreaterThenOrEqualTo(first, second) => gen_double(
                 self,
-                first,
                 second,
+                first,
                 r"
+    xchg rax, rdx
     mov rsi, rax
     xor eax, eax
     cmp rsi, rdx
@@ -644,9 +649,10 @@ intlang_{name}:
 
             Expression::Sub(first, second) => gen_double(
                 self,
-                first,
                 second,
+                first,
                 r"
+    xchg rax, rdx
     sub rax, rdx
 ",
             ),
@@ -661,16 +667,17 @@ intlang_{name}:
             ),
 
             Expression::Mod(first, second) => {
-                self.generate_expression(second);
+                self.generate_expression(first);
                 self.generate_intermediate_save();
                 self.intermediate_counter += 1;
-                self.generate_expression(first);
+                self.generate_expression(second);
                 self.intermediate_counter -= 1;
                 let offset = self.get_intermediate_offset();
                 let _ = write!(
                     self.content,
                     r"
     mov rsi, [rbp-{offset}]
+    xchg rax, rsi
     cqo
     idiv rsi
     mov rax, rdx
