@@ -1,6 +1,7 @@
 #![deny(clippy::pedantic)]
 use std::{env::args, fs, path::Path};
 
+pub(crate) mod ast;
 mod codegen;
 mod lexer;
 mod parser;

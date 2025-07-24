@@ -9,7 +9,7 @@ use std::{
 
 use tempfile::TempDir;
 
-use crate::parser::{Ast, Expression, Function, Statement};
+use crate::ast::{Expression, Function, SourceFile, Statement};
 
 const PREAMBLE: &str = r#"
 section .data
@@ -71,7 +71,7 @@ struct CodeGen {
     label_counter: usize,
 }
 
-pub fn generate_binary(ast: &Ast<'_>, target: &Path) {
+pub fn generate_binary(ast: &SourceFile<'_>, target: &Path) {
     let tmp_dir = TempDir::new().expect("could not create temp dir");
 
     let asm_file = tmp_dir.path().join("program.asm");
