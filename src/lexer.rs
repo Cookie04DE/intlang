@@ -7,10 +7,13 @@ use chumsky::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lexeme<'src> {
     Fn,
+    Break,
+    Continue,
     Ident(&'src str),
     OpenBrace,
     CloseBrace,
     Comma,
+    Colon,
     OpenCurly,
     CloseCurly,
     Return,
@@ -42,6 +45,8 @@ fn lexer<'src>() -> impl Parser<'src, &'src str, Vec<Lexeme<'src>>> {
     choice((
         just("fn").to(Lexeme::Fn),
         just("return").to(Lexeme::Return),
+        just("break").to(Lexeme::Break),
+        just("continue").to(Lexeme::Continue),
         just("if").to(Lexeme::If),
         just("else").to(Lexeme::Else),
         just("while").to(Lexeme::While),
@@ -52,6 +57,7 @@ fn lexer<'src>() -> impl Parser<'src, &'src str, Vec<Lexeme<'src>>> {
         just('{').to(Lexeme::OpenCurly),
         just('}').to(Lexeme::CloseCurly),
         just(';').to(Lexeme::Semicolon),
+        just(':').to(Lexeme::Colon),
         int(10)
             .map(str::parse)
             .map(Result::unwrap)
@@ -83,7 +89,7 @@ fn lexer<'src>() -> impl Parser<'src, &'src str, Vec<Lexeme<'src>>> {
     .collect()
 }
 
-pub fn lex(source: &str) -> Vec<Lexeme> {
+pub fn lex(source: &str) -> Vec<Lexeme<'_>> {
     lexer()
         .parse(source)
         .into_result()

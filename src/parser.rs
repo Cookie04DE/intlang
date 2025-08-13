@@ -69,13 +69,26 @@ fn statement_parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], Statement
                     then,
                     otherwise: otherwise.unwrap_or_default(),
                 }),
+            just(Lexeme::Break)
+                .ignore_then(select! {Lexeme::Ident(name) => name}.or_not())
+                .map(Statement::Break),
+            just(Lexeme::Continue)
+                .ignore_then(select! {Lexeme::Ident(name) => name}.or_not())
+                .map(Statement::Continue),
             just(Lexeme::Return)
                 .ignore_then(expression_parser())
                 .map(Statement::Return),
-            just(Lexeme::While)
-                .ignore_then(braced_expression_parser())
+            select! {Lexeme::Ident(name) => name}
+                .then_ignore(just(Lexeme::Colon))
+                .or_not()
+                .then_ignore(just(Lexeme::While))
+                .then(braced_expression_parser())
                 .then(statement_block_parser(statement_parser))
-                .map(|(condition, body)| Statement::While { condition, body }),
+                .map(|((label, condition), body)| Statement::While {
+                    label,
+                    condition,
+                    body,
+                }),
             select! {Lexeme::Ident(name) => name}
                 .then_ignore(just(Lexeme::EqualSign))
                 .then(expression_parser())

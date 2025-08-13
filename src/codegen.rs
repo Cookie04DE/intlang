@@ -93,6 +93,8 @@ pub fn generate_binary(ast: &SourceFile<'_>, target: &Path) {
             parent: &mut codegen,
             vars: HashMap::new(),
             intermediate_counter: 0,
+            loop_entries_stack: vec![],
+            loop_entries_by_name: HashMap::new(),
         };
         codegen_function.generate_function(f);
     }
@@ -126,10 +128,17 @@ impl CodeGen {
     }
 }
 
+struct LoopEntry {
+    start: String,
+    end: String,
+}
+
 struct CodeGenFunction<'a> {
     parent: &'a mut CodeGen,
     vars: HashMap<String, usize>,
     intermediate_counter: usize,
+    loop_entries_by_name: HashMap<String, LoopEntry>,
+    loop_entries_stack: Vec<LoopEntry>,
 }
 
 impl Deref for CodeGenFunction<'_> {
@@ -194,6 +203,7 @@ fn determine_max_intermediate_count_and_variables<'src>(
 
     fn stm_max<'src>(stm: &Statement<'src>) -> (usize, HashSet<&'src str>) {
         match stm {
+            Statement::Break(_) | Statement::Continue(_) => (0, HashSet::new()),
             Statement::If {
                 condition,
                 then,
@@ -214,7 +224,11 @@ fn determine_max_intermediate_count_and_variables<'src>(
                         .collect(),
                 )
             }
-            Statement::While { condition, body } => {
+            Statement::While {
+                label: _,
+                condition,
+                body,
+            } => {
                 let (condition_inter, condition_vars) = expr_max(condition);
                 let (body_inter, body_vars) = determine_max_intermediate_count_and_variables(body);
                 (
@@ -286,8 +300,6 @@ impl CodeGenFunction<'_> {
 
         vars.extend(&f.parameters);
 
-        dbg!((vars.len(), max_intermediate_count));
-
         for var in &vars {
             let idx = self.vars.len();
             self.vars.insert((*var).to_string(), idx);
@@ -317,7 +329,20 @@ intlang_{name}:
         self.generate_statements(&f.body);
     }
 
+    fn get_loop_entry(&self, label: Option<&str>) -> &LoopEntry {
+        match label {
+            Some(label) => self
+                .loop_entries_by_name
+                .get(label)
+                .unwrap_or_else(|| panic!("unknown label {label}")),
+            None => self.loop_entries_stack.last().expect("not inside a loop"),
+        }
+    }
+
+    #[allow(clippy::too_many_lines)]
     fn generate_statements(&mut self, stms: &[Statement]) {
+        let loop_entries: HashSet<String> = self.loop_entries_by_name.keys().cloned().collect();
+        let loop_entries_len = self.loop_entries_stack.len();
         for stm in stms {
             match stm {
                 Statement::Expression(expr) => self.generate_expression(expr),
@@ -360,9 +385,28 @@ intlang_{name}:
 {end_label}:"
                     );
                 }
-                Statement::While { condition, body } => {
+                Statement::While {
+                    label,
+                    condition,
+                    body,
+                } => {
                     let start_label = self.get_next_label();
                     let end_label = self.get_next_label();
+
+                    if let Some(label) = label {
+                        self.loop_entries_by_name.insert(
+                            (*label).to_string(),
+                            LoopEntry {
+                                start: start_label.clone(),
+                                end: end_label.clone(),
+                            },
+                        );
+                        self.loop_entries_stack.push(LoopEntry {
+                            start: start_label.clone(),
+                            end: end_label.clone(),
+                        });
+                    }
+
                     let _ = write!(
                         self.content,
                         r"
@@ -393,8 +437,29 @@ intlang_{name}:
     ",
                     );
                 }
+                Statement::Break(label) => {
+                    let end_label = self.get_loop_entry(*label).end.clone();
+                    let _ = write!(
+                        self.content,
+                        r"
+    jmp {end_label}
+    "
+                    );
+                }
+                Statement::Continue(label) => {
+                    let start_label = self.get_loop_entry(*label).start.clone();
+                    let _ = write!(
+                        self.content,
+                        r"
+    jmp {start_label}
+    "
+                    );
+                }
             }
         }
+        self.loop_entries_by_name
+            .retain(|k, _v| loop_entries.contains(k));
+        self.loop_entries_stack.truncate(loop_entries_len);
     }
 
     #[allow(clippy::too_many_lines)]

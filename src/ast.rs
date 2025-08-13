@@ -19,7 +19,10 @@ pub enum Statement<'src> {
         otherwise: Vec<Statement<'src>>,
     },
     Return(Expression<'src>),
+    Break(Option<&'src str>),
+    Continue(Option<&'src str>),
     While {
+        label: Option<&'src str>,
         condition: Expression<'src>,
         body: Vec<Statement<'src>>,
     },
