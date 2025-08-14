@@ -18,6 +18,8 @@ pub enum Lexeme<'src> {
     CloseCurly,
     Return,
     Semicolon,
+    OpenSquareBracket,
+    CloseSquareBracket,
     Literal(i64),
     If,
     Else,
@@ -58,6 +60,8 @@ fn lexer<'src>() -> impl Parser<'src, &'src str, Vec<Lexeme<'src>>> {
         just('}').to(Lexeme::CloseCurly),
         just(';').to(Lexeme::Semicolon),
         just(':').to(Lexeme::Colon),
+        just('[').to(Lexeme::OpenSquareBracket),
+        just(']').to(Lexeme::CloseSquareBracket),
         int(10)
             .map(str::parse)
             .map(Result::unwrap)

@@ -1,6 +1,6 @@
 use chumsky::{
     IterParser, Parser,
-    pratt::{infix, left, prefix},
+    pratt::{infix, left, postfix, prefix},
     prelude::{choice, recursive},
     primitive::just,
     select,
@@ -89,12 +89,10 @@ fn statement_parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], Statement
                     condition,
                     body,
                 }),
-            select! {Lexeme::Ident(name) => name}
+            expression_parser()
                 .then_ignore(just(Lexeme::EqualSign))
                 .then(expression_parser())
-                .map(|(name, expression)| {
-                    Statement::VariableAssignment(name, Box::new(expression))
-                }),
+                .map(|(left, right)| Statement::Assignment(Box::new(left), Box::new(right))),
             expression_parser().map(Statement::Expression),
         ))
         .then_ignore(just(Lexeme::Semicolon))
@@ -191,6 +189,14 @@ fn expression_parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], Expressi
             prefix(7, just(Lexeme::Tilde), |_, expr, _| {
                 Expression::BitwiseNot(Box::new(expr))
             }),
+            postfix(
+                8,
+                expression_parser.delimited_by(
+                    just(Lexeme::OpenSquareBracket),
+                    just(Lexeme::CloseSquareBracket),
+                ),
+                |a, b, _| Expression::Index(Box::new(a), Box::new(b)),
+            ),
         ))
     })
 }

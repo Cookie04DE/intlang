@@ -26,13 +26,14 @@ pub enum Statement<'src> {
         condition: Expression<'src>,
         body: Vec<Statement<'src>>,
     },
-    VariableAssignment(&'src str, Box<Expression<'src>>),
+    Assignment(Box<Expression<'src>>, Box<Expression<'src>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expression<'src> {
     Variable(&'src str),
     FunctionCall(&'src str, Vec<Expression<'src>>),
+    Index(Box<Expression<'src>>, Box<Expression<'src>>),
     Literal(i64),
     Negation(Box<Expression<'src>>),
     Equal(Box<Expression<'src>>, Box<Expression<'src>>),

@@ -23,6 +23,9 @@ section .text
     global main
     extern scanf
     extern printf
+    extern malloc
+    extern realloc
+    extern free
 
 read:
     push rbp
@@ -42,6 +45,33 @@ write:
     mov rsi, rax
     xor eax, eax
     call printf
+    leave
+    ret
+
+il_malloc:
+    push rbp
+    mov rbp, rsp
+    shl rax, 3
+    mov rdi, rax
+    call malloc
+    leave
+    ret
+
+il_realloc:
+    push rbp
+    mov rbp, rsp
+    mov rdi, rdx
+    shl rax, 3
+    mov rsi, rax
+    call realloc
+    leave
+    ret
+
+il_free:
+    push rbp
+    mov rbp, rsp
+    mov rdi, rax
+    call free
     leave
     ret
 
@@ -154,6 +184,7 @@ impl DerefMut for CodeGenFunction<'_> {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn determine_max_intermediate_count_and_variables<'src>(
     stms: &[Statement<'src>],
 ) -> (usize, HashSet<&'src str>) {
@@ -172,7 +203,8 @@ fn determine_max_intermediate_count_and_variables<'src>(
             | Expression::NotEqual(left, right)
             | Expression::Or(left, right)
             | Expression::Sub(left, right)
-            | Expression::Xor(left, right) => {
+            | Expression::Xor(left, right)
+            | Expression::Index(left, right) => {
                 let (left_inter, left_vars) = expr_max(left);
                 let (right_inter, right_vars) = expr_max(right);
 
@@ -229,21 +261,35 @@ fn determine_max_intermediate_count_and_variables<'src>(
                 condition,
                 body,
             } => {
-                let (condition_inter, condition_vars) = expr_max(condition);
+                let (condition_inter, mut condition_vars) = expr_max(condition);
                 let (body_inter, body_vars) = determine_max_intermediate_count_and_variables(body);
-                (
-                    condition_inter.max(body_inter),
-                    condition_vars.union(&body_vars).copied().collect(),
-                )
+                condition_vars.extend(body_vars);
+
+                (condition_inter.max(body_inter), condition_vars)
             }
             Statement::Expression(expr) | Statement::Return(expr) => expr_max(expr),
-            Statement::VariableAssignment(var, expr) => {
-                let (expr_inter, mut expr_vars) = expr_max(expr);
+            Statement::Assignment(left, right) => match &**left {
+                Expression::Variable(var) => {
+                    let (expr_inter, mut expr_vars) = expr_max(right);
 
-                expr_vars.insert(var);
+                    expr_vars.insert(var);
 
-                (expr_inter, expr_vars)
-            }
+                    (expr_inter, expr_vars)
+                }
+                Expression::Index(base, offset) => {
+                    let (base_inter, mut base_vars) = expr_max(base);
+                    let (offset_inter, offset_vars) = expr_max(offset);
+                    let (right_inter, right_vars) = expr_max(right);
+
+                    base_vars.extend(offset_vars);
+                    base_vars.extend(right_vars);
+
+                    (base_inter.max(offset_inter).max(right_inter) + 2, base_vars)
+                }
+                _ => panic!(
+                    "Unsupported expression for assignment: {left:?}; only index or variable are supported"
+                ),
+            },
         }
     }
 
@@ -346,16 +392,41 @@ intlang_{name}:
         for stm in stms {
             match stm {
                 Statement::Expression(expr) => self.generate_expression(expr),
-                Statement::VariableAssignment(name, expr) => {
-                    self.generate_expression(expr);
-                    let offset = self.get_var_offset(name);
-                    let _ = write!(
-                        self.content,
-                        r"
+                Statement::Assignment(left, right) => match &**left {
+                    Expression::Variable(name) => {
+                        self.generate_expression(right);
+                        let offset = self.get_var_offset(name);
+                        let _ = write!(
+                            self.content,
+                            r"
     mov [rbp-{offset}], rax
     "
-                    );
-                }
+                        );
+                    }
+                    Expression::Index(base, offset) => {
+                        self.generate_expression(base);
+                        self.generate_intermediate_save();
+                        let base_offset = self.get_intermediate_offset();
+                        self.intermediate_counter += 1;
+                        self.generate_expression(offset);
+                        self.generate_intermediate_save();
+                        let offset_offset = self.get_intermediate_offset();
+                        self.intermediate_counter += 1;
+                        self.generate_expression(right);
+                        self.intermediate_counter -= 2;
+                        let _ = write!(
+                            self.content,
+                            r"
+    mov rdx, [rbp-{base_offset}]
+    mov rsi, [rbp-{offset_offset}]
+    mov [rdx + rsi * 8], rax
+    ",
+                        );
+                    }
+                    _ => panic!(
+                        "Unsupported expression for assignment: {left:?}; only index or variable are supported"
+                    ),
+                },
                 Statement::If {
                     condition,
                     then,
@@ -557,6 +628,50 @@ intlang_{name}:
 "
                     );
                 }
+                "malloc" => {
+                    assert!(
+                        arguments.len() == 1,
+                        "malloc call needs to have exactly one argument"
+                    );
+                    self.generate_expression(&arguments[0]);
+                    let _ = write!(
+                        self.content,
+                        r"
+    call il_malloc
+"
+                    );
+                }
+                "realloc" => {
+                    assert!(
+                        arguments.len() == 2,
+                        "realloc call needs to have exactly two arguments"
+                    );
+                    self.generate_expression(&arguments[0]);
+                    self.generate_intermediate_save();
+                    self.intermediate_counter += 1;
+                    self.generate_expression(&arguments[1]);
+                    self.intermediate_counter -= 1;
+                    self.generate_intermediate_restore();
+                    let _ = write!(
+                        self.content,
+                        r"
+    call il_realloc
+"
+                    );
+                }
+                "free" => {
+                    assert!(
+                        arguments.len() == 1,
+                        "free call needs to have exactly one argument"
+                    );
+                    self.generate_expression(&arguments[0]);
+                    let _ = write!(
+                        self.content,
+                        r"
+    call il_free
+"
+                    );
+                }
                 _ => {
                     assert!(
                         arguments.len() <= 6,
@@ -594,6 +709,21 @@ intlang_{name}:
                     self.intermediate_counter = inner_base;
                 }
             },
+            Expression::Index(left, right) => {
+                self.generate_expression(left);
+                self.generate_intermediate_save();
+                self.intermediate_counter += 1;
+                self.generate_expression(right);
+                self.intermediate_counter -= 1;
+                let offset = self.get_intermediate_offset();
+                let _ = write!(
+                    self.content,
+                    r"
+    mov rsi, [rbp-{offset}]
+    mov rax, [rsi + rax * 8]
+",
+                );
+            }
             Expression::Variable(name) => {
                 let offset = self.get_var_offset(name);
                 let _ = write!(
