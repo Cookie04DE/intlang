@@ -27,7 +27,7 @@ It has the following expression kinds:
 - variable access
 - function call
 - int literal
-- negation (infix -)
+- negation (unary prefix -)
 - comparators and logical operators (<, <=, >, >=, ==, !=, !, |, &, ~, ^)
 - arithmetic operators (+, -, *, /, %)
 
