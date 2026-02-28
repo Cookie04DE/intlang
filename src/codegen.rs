@@ -27,7 +27,7 @@ section .text
     extern realloc
     extern free
 
-read:
+intlang_read:
     push rbp
     mov rbp, rsp
     lea rdi, [input_format]
@@ -38,39 +38,35 @@ read:
     leave
     ret
 
-write:
+intlang_write:
     push rbp
     mov rbp, rsp
+    mov rsi, rdi
     lea rdi, [output_format]
-    mov rsi, rax
     xor eax, eax
     call printf
     leave
     ret
 
-il_malloc:
+intlang_malloc:
     push rbp
     mov rbp, rsp
-    shl rax, 3
-    mov rdi, rax
+    shl rdi, 3
     call malloc
     leave
     ret
 
-il_realloc:
+intlang_realloc:
     push rbp
     mov rbp, rsp
-    mov rdi, rdx
-    shl rax, 3
-    mov rsi, rax
+    shl rsi, 3
     call realloc
     leave
     ret
 
-il_free:
+intlang_free:
     push rbp
     mov rbp, rsp
-    mov rdi, rax
     call free
     leave
     ret
@@ -605,110 +601,42 @@ intlang_{name}:
 ",
             ),
 
-            Expression::FunctionCall(name, arguments) => match *name {
-                "read" => {
-                    assert!(arguments.is_empty(), "read call cannot have any arguments");
-                    let _ = write!(
-                        self.content,
-                        r"
-    call read
-"
-                    );
-                }
-                "write" => {
-                    assert!(
-                        arguments.len() == 1,
-                        "write call needs to have exactly one argument"
-                    );
-                    self.generate_expression(&arguments[0]);
-                    let _ = write!(
-                        self.content,
-                        r"
-    call write
-"
-                    );
-                }
-                "malloc" => {
-                    assert!(
-                        arguments.len() == 1,
-                        "malloc call needs to have exactly one argument"
-                    );
-                    self.generate_expression(&arguments[0]);
-                    let _ = write!(
-                        self.content,
-                        r"
-    call il_malloc
-"
-                    );
-                }
-                "realloc" => {
-                    assert!(
-                        arguments.len() == 2,
-                        "realloc call needs to have exactly two arguments"
-                    );
-                    self.generate_expression(&arguments[0]);
+            Expression::FunctionCall(name, arguments) => {
+                assert!(
+                    arguments.len() <= 6,
+                    "can't handle call with more than 6 parameters'"
+                );
+
+                let inner_base = self.intermediate_counter;
+                let outer_base = self.intermediate_counter + arguments.len();
+
+                for (off, arg) in arguments.iter().enumerate() {
+                    self.intermediate_counter = outer_base;
+                    self.generate_expression(arg);
+                    self.intermediate_counter = inner_base + off;
                     self.generate_intermediate_save();
-                    self.intermediate_counter += 1;
-                    self.generate_expression(&arguments[1]);
-                    self.intermediate_counter -= 1;
-                    self.generate_intermediate_restore();
+                }
+
+                for (off, reg) in PARAMETER_REGISTERS.iter().take(arguments.len()).enumerate() {
+                    self.intermediate_counter = inner_base + off;
+                    let offset = self.get_intermediate_offset();
                     let _ = write!(
                         self.content,
                         r"
-    call il_realloc
-"
-                    );
-                }
-                "free" => {
-                    assert!(
-                        arguments.len() == 1,
-                        "free call needs to have exactly one argument"
-                    );
-                    self.generate_expression(&arguments[0]);
-                    let _ = write!(
-                        self.content,
-                        r"
-    call il_free
-"
-                    );
-                }
-                _ => {
-                    assert!(
-                        arguments.len() <= 6,
-                        "can't handle call with more than 6 parameters'"
-                    );
-
-                    let inner_base = self.intermediate_counter;
-                    let outer_base = self.intermediate_counter + arguments.len();
-
-                    for (off, arg) in arguments.iter().enumerate() {
-                        self.intermediate_counter = outer_base;
-                        self.generate_expression(arg);
-                        self.intermediate_counter = inner_base + off;
-                        self.generate_intermediate_save();
-                    }
-
-                    for (off, reg) in PARAMETER_REGISTERS.iter().take(arguments.len()).enumerate() {
-                        self.intermediate_counter = inner_base + off;
-                        let offset = self.get_intermediate_offset();
-                        let _ = write!(
-                            self.content,
-                            r"
     mov {reg}, [rbp-{offset}]
-",
-                        );
-                    }
+    ",
+                    );
+                }
 
-                    let _ = write!(
-                        self.content,
-                        r"
+                let _ = write!(
+                    self.content,
+                    r"
     call intlang_{name}
     "
-                    );
+                );
 
-                    self.intermediate_counter = inner_base;
-                }
-            },
+                self.intermediate_counter = inner_base;
+            }
             Expression::Index(left, right) => {
                 self.generate_expression(left);
                 self.generate_intermediate_save();
