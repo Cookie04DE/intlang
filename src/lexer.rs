@@ -7,9 +7,7 @@ use chumsky::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StringComponent<'src> {
     Literal(&'src str),
-    EscapedBackslash,
-    EscapedNewline,
-    EscapedDoubleQuote,
+    Escaped(char),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,6 +50,15 @@ pub enum Lexeme<'src> {
     PercentSign,
 }
 
+fn escaped_char<'src>() -> impl Parser<'src, &'src str, char> {
+    just('\\').ignore_then(choice((
+        just('\\').to('\\'),
+        just('n').to('\n'),
+        just('"').to('"'),
+        just('\'').to('\''),
+    )))
+}
+
 fn lexer<'src>() -> impl Parser<'src, &'src str, Vec<Lexeme<'src>>> {
     choice((
         just("fn").to(Lexeme::Fn),
@@ -71,7 +78,8 @@ fn lexer<'src>() -> impl Parser<'src, &'src str, Vec<Lexeme<'src>>> {
         just(':').to(Lexeme::Colon),
         just('[').to(Lexeme::OpenSquareBracket),
         just(']').to(Lexeme::CloseSquareBracket),
-        any()
+        escaped_char()
+            .or(any())
             .delimited_by(just('\''), just('\''))
             .map(|c: char| u32::from(c).into())
             .map(Lexeme::Literal),
@@ -86,9 +94,7 @@ fn lexer<'src>() -> impl Parser<'src, &'src str, Vec<Lexeme<'src>>> {
                 .at_least(1)
                 .to_slice()
                 .map(StringComponent::Literal),
-            just("\\\\").to(StringComponent::EscapedBackslash),
-            just("\\n").to(StringComponent::EscapedNewline),
-            just("\\\"").to(StringComponent::EscapedDoubleQuote),
+            escaped_char().map(StringComponent::Escaped),
         ))
         .repeated()
         .collect()

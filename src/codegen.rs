@@ -815,9 +815,7 @@ intlang_{name}:
                         s.iter()
                             .flat_map(|c| match c {
                                 StringComponent::Literal(s) => Left(s.chars()),
-                                StringComponent::EscapedNewline => Right(iter::once('\n')),
-                                StringComponent::EscapedBackslash => Right(iter::once('\\')),
-                                StringComponent::EscapedDoubleQuote => Right(iter::once('\"')),
+                                StringComponent::Escaped(c) => Right(iter::once(*c)),
                             })
                             .collect(),
                     )

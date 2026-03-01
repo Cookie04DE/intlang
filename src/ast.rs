@@ -34,18 +34,14 @@ pub enum Statement<'src> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StringComponent<'src> {
     Literal(&'src str),
-    EscapedBackslash,
-    EscapedNewline,
-    EscapedDoubleQuote,
+    Escaped(char),
 }
 
 impl<'src> From<lexer::StringComponent<'src>> for StringComponent<'src> {
     fn from(value: lexer::StringComponent<'src>) -> Self {
         match value {
             lexer::StringComponent::Literal(s) => Self::Literal(s),
-            lexer::StringComponent::EscapedBackslash => Self::EscapedBackslash,
-            lexer::StringComponent::EscapedNewline => Self::EscapedNewline,
-            lexer::StringComponent::EscapedDoubleQuote => Self::EscapedDoubleQuote,
+            lexer::StringComponent::Escaped(c) => Self::Escaped(c),
         }
     }
 }

@@ -1,6 +1,5 @@
 fn main() {
     write_c('A');
-    write_c('
-');
+    write_c('\n');
     return 0;
 }
