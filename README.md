@@ -42,6 +42,8 @@ A couple of functions are builtin:
 - `write(i)` writes the given integer (as a decimal with potential minus sign) and a newline to stdout
 - `read_c()` reads a utf-8 character from stdin and returns it's codepoint or `-1` in case of eof
 - `write_c(c)` writes the utf-8 character with the codepoint `c` to stdout
+- `i_to_s(i)` returns a pointer to a string containing the decimal representation of the integer (prefixed with a `-` in case `i` is negative)
+- `s_to_i(l, s)` returns the integer value of the decimal string starting at `s` with length `l`
 - `malloc(n)` allocates heap memory for `n` integers and returns a pointer to that memory
 - `realloc(p, n)` resizes the heap memory starting at `p` to accommodate for `n` integers
 - `free(p)` deallocates the heap memory starting at `p`

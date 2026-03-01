@@ -23,6 +23,7 @@ const BUILTIN_STATIC: &str = r"
 section .bss
     number resq 1
     utf8 resb 4
+    decimal_number resq 21
 ";
 
 const BUILTIN_FUNCTIONS: &str = r"
@@ -189,6 +190,78 @@ intlang_free:
     mov rbp, rsp
     call free
     leave
+    ret
+
+intlang_s_to_i:
+    xor rax, rax
+    lea rdx, [rsi+rdi*8]
+    mov rcx, [rsi]
+    cmp rcx, '+'
+    je s_to_i_plus_sign
+    cmp rcx, '-'
+    je s_to_i_minus_sign
+    jmp s_to_i_no_sign
+s_to_i_plus_sign:
+    add rsi, 8
+s_to_i_no_sign:
+s_to_i_positive_loop:
+    imul rax, 10
+    mov rcx, [rsi]
+    sub rcx, '0'
+    add rax, rcx
+    add rsi, 8
+    cmp rsi, rdx
+    jne s_to_i_positive_loop
+    ret
+s_to_i_minus_sign:
+    add rsi, 8
+s_to_i_negative_loop:
+    imul rax, 10
+    mov rcx, [rsi]
+    sub rcx, '0'
+    sub rax, rcx
+    add rsi, 8
+    cmp rsi, rdx
+    jne s_to_i_negative_loop
+    ret
+
+intlang_i_to_s:
+    mov rax, rdi
+    xor rdi, rdi
+    mov rcx, 10
+    lea rsi, [decimal_number+8*20]
+    cmp rax, 0
+    jl i_to_s_negative_loop
+i_to_s_positive_loop:
+    cqo
+    idiv rcx
+    add rdx, '0'
+    mov [rsi], rdx
+    sub rsi, 8
+    inc rdi
+    test rax, rax
+    jnz i_to_s_positive_loop
+
+    mov [rsi], rdi
+    mov rax, rsi
+    ret
+
+i_to_s_negative_loop:
+    cqo
+    idiv rcx
+    neg rdx
+    add rdx, '0'
+    mov [rsi], rdx
+    sub rsi, 8
+    inc rdi
+    test rax, rax
+    jnz i_to_s_negative_loop
+
+    mov [rsi], '-'
+    sub rsi, 8
+    inc rdi
+    mov [rsi], rdi
+    mov rax, rsi
     ret
 ";
 
