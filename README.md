@@ -1,15 +1,15 @@
 # Intlang - A toy programming language with a toy compiler
 
 ## Introduction
-Intlang is a toy programming language.
+Intlang is a toy programming language with C-like syntax.
 It's only datatype is the 64 bit signed integer.
 
 ## Language structure
-An Intlang program is made of functions with names and optionally parameters.
+An Intlang program is made of functions with names and optionally parameters as well as constants.
 
-These functions contain statements.
+Constants can either be integers or strings.
 
-The syntax is C-like.
+Functions contain statements.
 
 The language supports C-style comments. Use `//` to start a line comment, `/*` to start a block comment and `*/` to end one.
 

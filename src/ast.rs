@@ -3,6 +3,13 @@ use crate::lexer;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceFile<'src> {
     pub functions: Vec<Function<'src>>,
+    pub constants: Vec<(&'src str, ConstantValue<'src>)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConstantValue<'src> {
+    Integer(i64),
+    String(Vec<StringComponent<'src>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,7 +55,7 @@ impl<'src> From<lexer::StringComponent<'src>> for StringComponent<'src> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expression<'src> {
-    Variable(&'src str),
+    Ident(&'src str),
     FunctionCall(&'src str, Vec<Expression<'src>>),
     Index(Box<Expression<'src>>, Box<Expression<'src>>),
     Literal(i64),

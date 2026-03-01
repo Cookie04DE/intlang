@@ -13,6 +13,7 @@ pub enum StringComponent<'src> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Lexeme<'src> {
     Fn,
+    Const,
     Break,
     Continue,
     Ident(&'src str),
@@ -76,6 +77,7 @@ fn whitespace_or_comments<'src>() -> impl Parser<'src, &'src str, ()> {
 fn lexer<'src>() -> impl Parser<'src, &'src str, Vec<Lexeme<'src>>> {
     choice((
         just("fn").to(Lexeme::Fn),
+        just("const").to(Lexeme::Const),
         just("return").to(Lexeme::Return),
         just("break").to(Lexeme::Break),
         just("continue").to(Lexeme::Continue),

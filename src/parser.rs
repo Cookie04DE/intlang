@@ -1,3 +1,5 @@
+use std::convert::identity;
+
 use chumsky::{
     IterParser, Parser,
     pratt::{infix, left, postfix, prefix},
@@ -5,9 +7,11 @@ use chumsky::{
     primitive::just,
     select,
 };
+use either::Either::{Left, Right};
+use itertools::Itertools;
 
 use crate::{
-    ast::{Expression, Function, SourceFile, Statement},
+    ast::{ConstantValue, Expression, Function, SourceFile, Statement},
     lexer::Lexeme,
 };
 
@@ -20,9 +24,29 @@ pub fn parse<'src>(lexemes: &'src [Lexeme<'src>]) -> SourceFile<'src> {
 
 fn parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], SourceFile<'src>> + Clone {
     function_parser()
+        .map(Left)
+        .or(constant_parser().map(Right))
         .repeated()
         .collect()
-        .map(|functions| SourceFile { functions })
+        .map(|functions_or_constants: Vec<_>| {
+            let (functions, constants) = functions_or_constants.into_iter().partition_map(identity);
+            SourceFile {
+                functions,
+                constants,
+            }
+        })
+}
+
+fn constant_parser<'src>()
+-> impl Parser<'src, &'src [Lexeme<'src>], (&'src str, ConstantValue<'src>)> + Clone {
+    just(Lexeme::Const)
+        .ignore_then(select! {Lexeme::Ident(name) => name})
+        .then_ignore(just(Lexeme::EqualSign))
+        .then(
+            select! {Lexeme::Literal(i) => ConstantValue::Integer(i)}
+                .or(select! {Lexeme::String(s) => ConstantValue::String(s.into_iter().map(Into::into).collect())}),
+        )
+        .then_ignore(just(Lexeme::Semicolon))
 }
 
 fn function_parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], Function<'src>> + Clone {
@@ -121,7 +145,7 @@ fn expression_parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], Expressi
                 expression_parser
                     .clone()
                     .delimited_by(just(Lexeme::OpenBrace), just(Lexeme::CloseBrace)),
-                select! {Lexeme::Ident(name) => Expression::Variable(name)},
+                select! {Lexeme::Ident(name) => Expression::Ident(name)},
                 select! {Lexeme::Literal(num) => Expression::Literal(num)},
                 select! {Lexeme::String(s) => Expression::String(s.into_iter().map(Into::into).collect())},
             ))

@@ -11,7 +11,7 @@ use either::Either::{Left, Right};
 use itertools::Itertools;
 use tempfile::TempDir;
 
-use crate::ast::{Expression, Function, SourceFile, Statement, StringComponent};
+use crate::ast::{ConstantValue, Expression, Function, SourceFile, Statement, StringComponent};
 
 const BUILTIN_DATA: &str = r#"
 section .data
@@ -37,8 +37,8 @@ section .text
 intlang_read:
     push rbp
     mov rbp, rsp
-    lea rdi, [input_format]
-    lea rsi, [number]
+    mov rdi, input_format
+    mov rsi, number
     xor eax, eax
     call scanf
     mov rax, [number]
@@ -49,7 +49,7 @@ intlang_write:
     push rbp
     mov rbp, rsp
     mov rsi, rdi
-    lea rdi, [output_format]
+    mov rdi, output_format
     xor eax, eax
     call printf
     leave
@@ -74,7 +74,7 @@ intlang_realloc:
 intlang_read_c:
     xor rax, rax
     xor rdi, rdi
-    lea rsi, [utf8]
+    mov rsi, utf8
     mov rdx, 1
     syscall
     test rax, rax
@@ -134,7 +134,7 @@ intlang_write_c:
     mov byte [utf8], al
     mov rax, 1
     mov rdi, 1
-    lea rsi, [utf8]
+    mov rsi, utf8
     mov rdx, 1
     syscall
     ret
@@ -180,7 +180,7 @@ write_utf8_loop:
 
     mov rax, 1
     mov rdi, 1
-    lea rsi, [utf8]
+    mov rsi, utf8
     syscall
     ret
 
@@ -218,6 +218,7 @@ struct CodeGen {
     content: String,
     label_counter: usize,
     strings: HashMap<Vec<char>, usize>,
+    constants: HashMap<String, String>,
 }
 
 pub fn generate_binary(ast: &SourceFile<'_>, target: &Path) {
@@ -228,6 +229,17 @@ pub fn generate_binary(ast: &SourceFile<'_>, target: &Path) {
     let mut content = String::new();
 
     let mut codegen = CodeGen::default();
+
+    for c in &ast.constants {
+        let value = match &c.1 {
+            ConstantValue::String(s) => {
+                format!("intlangstring_{}", codegen.get_or_insert_string(s))
+            }
+            ConstantValue::Integer(i) => format!("{i}"),
+        };
+
+        codegen.constants.insert(c.0.to_string(), value);
+    }
 
     for f in &ast.functions {
         let mut codegen_function = CodeGenFunction {
@@ -252,6 +264,7 @@ pub fn generate_binary(ast: &SourceFile<'_>, target: &Path) {
                 .join(", ")
         );
     }
+
     content.push_str(BUILTIN_STATIC);
     content.push_str(BUILTIN_FUNCTIONS);
     content.push_str(&codegen.content);
@@ -288,6 +301,154 @@ impl CodeGen {
         self.label_counter += 1;
         label
     }
+
+    fn get_or_insert_string(&mut self, s: &[StringComponent<'_>]) -> usize {
+        let key = self.strings.len();
+        *self
+            .strings
+            .entry(
+                s.iter()
+                    .flat_map(|c| match c {
+                        StringComponent::Literal(s) => Left(s.chars()),
+                        StringComponent::Escaped(c) => Right(iter::once(*c)),
+                    })
+                    .collect(),
+            )
+            .or_insert(key)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn determine_max_intermediate_count_and_variables<'src>(
+        &self,
+        stms: &[Statement<'src>],
+    ) -> (usize, HashSet<&'src str>) {
+        fn expr_max<'src>(
+            code_gen: &CodeGen,
+            expr: &Expression<'src>,
+        ) -> (usize, HashSet<&'src str>) {
+            match expr {
+                Expression::Add(left, right)
+                | Expression::Div(left, right)
+                | Expression::And(left, right)
+                | Expression::Equal(left, right)
+                | Expression::GreaterThen(left, right)
+                | Expression::GreaterThenOrEqualTo(left, right)
+                | Expression::LessThen(left, right)
+                | Expression::LessThenOrEqualTo(left, right)
+                | Expression::Mod(left, right)
+                | Expression::Mul(left, right)
+                | Expression::NotEqual(left, right)
+                | Expression::Or(left, right)
+                | Expression::Sub(left, right)
+                | Expression::Xor(left, right)
+                | Expression::Index(left, right) => {
+                    let (left_inter, left_vars) = expr_max(code_gen, left);
+                    let (right_inter, right_vars) = expr_max(code_gen, right);
+
+                    (
+                        left_inter.max(right_inter) + 1,
+                        left_vars.union(&right_vars).copied().collect(),
+                    )
+                }
+                Expression::Ident(name) => (
+                    0,
+                    if code_gen.constants.contains_key(*name) {
+                        HashSet::new()
+                    } else {
+                        HashSet::from([*name])
+                    },
+                ),
+                Expression::Literal(_) | Expression::String(_) => (0, HashSet::new()),
+                Expression::FunctionCall(_, args) => {
+                    let (inter, vars) = args.iter().map(|expr| expr_max(code_gen, expr)).fold(
+                        (0, HashSet::new()),
+                        |(prev_inter, prev_vars), (next_inter, next_vars)| {
+                            (
+                                prev_inter.max(next_inter),
+                                prev_vars.union(&next_vars).copied().collect(),
+                            )
+                        },
+                    );
+                    (inter + args.len(), vars)
+                }
+                Expression::Negation(expr)
+                | Expression::LogicalNot(expr)
+                | Expression::BitwiseNot(expr) => expr_max(code_gen, expr),
+            }
+        }
+
+        fn stm_max<'src>(code_gen: &CodeGen, stm: &Statement<'src>) -> (usize, HashSet<&'src str>) {
+            match stm {
+                Statement::Break(_) | Statement::Continue(_) => (0, HashSet::new()),
+                Statement::If {
+                    condition,
+                    then,
+                    otherwise,
+                } => {
+                    let (condition_inter, condition_vars) = expr_max(code_gen, condition);
+                    let (then_inter, then_vars) =
+                        code_gen.determine_max_intermediate_count_and_variables(then);
+                    let (otherwise_inter, otherwise_vars) =
+                        code_gen.determine_max_intermediate_count_and_variables(otherwise);
+                    (
+                        condition_inter.max(then_inter).max(otherwise_inter),
+                        condition_vars
+                            .union(&then_vars)
+                            .copied()
+                            .collect::<HashSet<&'src str>>()
+                            .union(&otherwise_vars)
+                            .copied()
+                            .collect(),
+                    )
+                }
+                Statement::While {
+                    label: _,
+                    condition,
+                    body,
+                } => {
+                    let (condition_inter, mut condition_vars) = expr_max(code_gen, condition);
+                    let (body_inter, body_vars) =
+                        code_gen.determine_max_intermediate_count_and_variables(body);
+                    condition_vars.extend(body_vars);
+
+                    (condition_inter.max(body_inter), condition_vars)
+                }
+                Statement::Expression(expr) | Statement::Return(expr) => expr_max(code_gen, expr),
+                Statement::Assignment(left, right) => match &**left {
+                    Expression::Ident(var) => {
+                        let (expr_inter, mut expr_vars) = expr_max(code_gen, right);
+
+                        expr_vars.insert(var);
+
+                        (expr_inter, expr_vars)
+                    }
+                    Expression::Index(base, offset) => {
+                        let (base_inter, mut base_vars) = expr_max(code_gen, base);
+                        let (offset_inter, offset_vars) = expr_max(code_gen, offset);
+                        let (right_inter, right_vars) = expr_max(code_gen, right);
+
+                        base_vars.extend(offset_vars);
+                        base_vars.extend(right_vars);
+
+                        (base_inter.max(offset_inter).max(right_inter) + 2, base_vars)
+                    }
+                    _ => panic!(
+                        "Unsupported expression for assignment: {left:?}; only index or variable are supported"
+                    ),
+                },
+            }
+        }
+
+        stms.iter().map(|stm| stm_max(self, stm)).fold(
+            (0, HashSet::new()),
+            |(prev_inter, prev_vars), (next_inter, next_vars)| {
+                (
+                    prev_inter.max(next_inter),
+                    prev_vars.union(&next_vars).copied().collect(),
+                )
+            },
+        )
+    }
 }
 
 struct LoopEntry {
@@ -314,126 +475,6 @@ impl DerefMut for CodeGenFunction<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.parent
     }
-}
-
-#[allow(clippy::too_many_lines)]
-fn determine_max_intermediate_count_and_variables<'src>(
-    stms: &[Statement<'src>],
-) -> (usize, HashSet<&'src str>) {
-    fn expr_max<'src>(expr: &Expression<'src>) -> (usize, HashSet<&'src str>) {
-        match expr {
-            Expression::Add(left, right)
-            | Expression::Div(left, right)
-            | Expression::And(left, right)
-            | Expression::Equal(left, right)
-            | Expression::GreaterThen(left, right)
-            | Expression::GreaterThenOrEqualTo(left, right)
-            | Expression::LessThen(left, right)
-            | Expression::LessThenOrEqualTo(left, right)
-            | Expression::Mod(left, right)
-            | Expression::Mul(left, right)
-            | Expression::NotEqual(left, right)
-            | Expression::Or(left, right)
-            | Expression::Sub(left, right)
-            | Expression::Xor(left, right)
-            | Expression::Index(left, right) => {
-                let (left_inter, left_vars) = expr_max(left);
-                let (right_inter, right_vars) = expr_max(right);
-
-                (
-                    left_inter.max(right_inter) + 1,
-                    left_vars.union(&right_vars).copied().collect(),
-                )
-            }
-            Expression::Variable(name) => (0, HashSet::from([*name])),
-            Expression::Literal(_) | Expression::String(_) => (0, HashSet::new()),
-            Expression::FunctionCall(_, args) => {
-                let (inter, vars) = args.iter().map(expr_max).fold(
-                    (0, HashSet::new()),
-                    |(prev_inter, prev_vars), (next_inter, next_vars)| {
-                        (
-                            prev_inter.max(next_inter),
-                            prev_vars.union(&next_vars).copied().collect(),
-                        )
-                    },
-                );
-                (inter + args.len(), vars)
-            }
-            Expression::Negation(expr)
-            | Expression::LogicalNot(expr)
-            | Expression::BitwiseNot(expr) => expr_max(expr),
-        }
-    }
-
-    fn stm_max<'src>(stm: &Statement<'src>) -> (usize, HashSet<&'src str>) {
-        match stm {
-            Statement::Break(_) | Statement::Continue(_) => (0, HashSet::new()),
-            Statement::If {
-                condition,
-                then,
-                otherwise,
-            } => {
-                let (condition_inter, condition_vars) = expr_max(condition);
-                let (then_inter, then_vars) = determine_max_intermediate_count_and_variables(then);
-                let (otherwise_inter, otherwise_vars) =
-                    determine_max_intermediate_count_and_variables(otherwise);
-                (
-                    condition_inter.max(then_inter).max(otherwise_inter),
-                    condition_vars
-                        .union(&then_vars)
-                        .copied()
-                        .collect::<HashSet<&'src str>>()
-                        .union(&otherwise_vars)
-                        .copied()
-                        .collect(),
-                )
-            }
-            Statement::While {
-                label: _,
-                condition,
-                body,
-            } => {
-                let (condition_inter, mut condition_vars) = expr_max(condition);
-                let (body_inter, body_vars) = determine_max_intermediate_count_and_variables(body);
-                condition_vars.extend(body_vars);
-
-                (condition_inter.max(body_inter), condition_vars)
-            }
-            Statement::Expression(expr) | Statement::Return(expr) => expr_max(expr),
-            Statement::Assignment(left, right) => match &**left {
-                Expression::Variable(var) => {
-                    let (expr_inter, mut expr_vars) = expr_max(right);
-
-                    expr_vars.insert(var);
-
-                    (expr_inter, expr_vars)
-                }
-                Expression::Index(base, offset) => {
-                    let (base_inter, mut base_vars) = expr_max(base);
-                    let (offset_inter, offset_vars) = expr_max(offset);
-                    let (right_inter, right_vars) = expr_max(right);
-
-                    base_vars.extend(offset_vars);
-                    base_vars.extend(right_vars);
-
-                    (base_inter.max(offset_inter).max(right_inter) + 2, base_vars)
-                }
-                _ => panic!(
-                    "Unsupported expression for assignment: {left:?}; only index or variable are supported"
-                ),
-            },
-        }
-    }
-
-    stms.iter().map(stm_max).fold(
-        (0, HashSet::new()),
-        |(prev_inter, prev_vars), (next_inter, next_vars)| {
-            (
-                prev_inter.max(next_inter),
-                prev_vars.union(&next_vars).copied().collect(),
-            )
-        },
-    )
 }
 
 const PARAMETER_REGISTERS: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
@@ -474,7 +515,7 @@ impl CodeGenFunction<'_> {
         );
 
         let (max_intermediate_count, mut vars) =
-            determine_max_intermediate_count_and_variables(&f.body);
+            self.determine_max_intermediate_count_and_variables(&f.body);
 
         vars.extend(&f.parameters);
 
@@ -525,14 +566,14 @@ intlang_{name}:
             match stm {
                 Statement::Expression(expr) => self.generate_expression(expr),
                 Statement::Assignment(left, right) => match &**left {
-                    Expression::Variable(name) => {
+                    Expression::Ident(name) => {
                         self.generate_expression(right);
                         let offset = self.get_var_offset(name);
                         let _ = write!(
                             self.content,
                             r"
     mov [rbp-{offset}], rax
-    "
+"
                         );
                     }
                     Expression::Index(base, offset) => {
@@ -552,7 +593,7 @@ intlang_{name}:
     mov rdx, [rbp-{base_offset}]
     mov rsi, [rbp-{offset_offset}]
     mov [rdx + rsi * 8], rax
-    ",
+",
                         );
                     }
                     _ => panic!(
@@ -572,7 +613,7 @@ intlang_{name}:
                         r"
     test rax, rax
     jz {else_label}
-    "
+"
                     );
                     self.generate_statements(then);
                     let _ = write!(
@@ -622,7 +663,7 @@ intlang_{name}:
                         r"
     test rax, rax
     jz {end_label}
-    "
+"
                     );
                     self.generate_statements(body);
                     let _ = write!(
@@ -638,7 +679,7 @@ intlang_{name}:
                         r"
     leave
     ret
-    ",
+",
                     );
                 }
                 Statement::Break(label) => {
@@ -647,7 +688,7 @@ intlang_{name}:
                         self.content,
                         r"
     jmp {end_label}
-    "
+"
                     );
                 }
                 Statement::Continue(label) => {
@@ -656,7 +697,7 @@ intlang_{name}:
                         self.content,
                         r"
     jmp {start_label}
-    "
+"
                     );
                 }
             }
@@ -761,7 +802,7 @@ intlang_{name}:
                         self.content,
                         r"
     mov {reg}, [rbp-{offset}]
-    ",
+",
                     );
                 }
 
@@ -769,7 +810,7 @@ intlang_{name}:
                     self.content,
                     r"
     call intlang_{name}
-    "
+"
                 );
 
                 self.intermediate_counter = inner_base;
@@ -789,42 +830,39 @@ intlang_{name}:
 ",
                 );
             }
-            Expression::Variable(name) => {
-                let offset = self.get_var_offset(name);
-                let _ = write!(
-                    self.content,
-                    r"
+            Expression::Ident(name) => {
+                if let Some(value) = self.parent.constants.get(*name) {
+                    let value = value.clone();
+                    let _ = write!(
+                        self.content,
+                        r"
+    mov rax, {value}
+"
+                    );
+                } else {
+                    let offset = self.get_var_offset(name);
+                    let _ = write!(
+                        self.content,
+                        r"
     mov rax, [rbp-{offset}]
-    "
-                );
+"
+                    );
+                }
             }
             Expression::Literal(literal) => {
                 let _ = write!(
                     self.content,
                     r"
     mov rax, {literal}
-    "
+"
                 );
             }
             Expression::String(s) => {
-                let key = self.parent.strings.len();
-                let actual = *self
-                    .parent
-                    .strings
-                    .entry(
-                        s.iter()
-                            .flat_map(|c| match c {
-                                StringComponent::Literal(s) => Left(s.chars()),
-                                StringComponent::Escaped(c) => Right(iter::once(*c)),
-                            })
-                            .collect(),
-                    )
-                    .or_insert(key);
-
+                let string = self.parent.get_or_insert_string(s);
                 let _ = write!(
                     self.content,
                     r"
-    mov rax, intlangstring_{actual}
+    mov rax, intlangstring_{string}
                     ",
                 );
             }
