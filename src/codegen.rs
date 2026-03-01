@@ -1,24 +1,31 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::Write,
-    fs,
+    fs, iter,
     ops::{Deref, DerefMut},
     path::Path,
     process::Command,
 };
 
+use either::Either::{Left, Right};
+use itertools::Itertools;
 use tempfile::TempDir;
 
-use crate::ast::{Expression, Function, SourceFile, Statement};
+use crate::ast::{Expression, Function, SourceFile, Statement, StringComponent};
 
-const PREAMBLE: &str = r#"
+const BUILTIN_DATA: &str = r#"
 section .data
     input_format db "%ld", 0
     output_format db "%ld", 10, 0
+"#;
 
+const BUILTIN_STATIC: &str = r"
 section .bss
     number resq 1
+    utf8 resb 4
+";
 
+const BUILTIN_FUNCTIONS: &str = r"
 section .text
     global main
     extern scanf
@@ -64,17 +71,132 @@ intlang_realloc:
     leave
     ret
 
+intlang_read_c:
+    xor rax, rax
+    xor rdi, rdi
+    lea rsi, [utf8]
+    mov rdx, 1
+    syscall
+    test rax, rax
+    jz read_utf8_eof
+    movzx r8, byte [utf8]
+    cmp r8, 0b11110000
+    jae read_utf8_four_byte
+    cmp r8, 0b11100000
+    jae read_utf8_three_byte
+    cmp r8, 0b11000000
+    jae read_utf8_two_byte
+    mov rax, r8
+    ret
+
+read_utf8_two_byte:
+    mov rdx, 1
+    and r8, 0b00011111
+    jmp read_utf8_common
+
+read_utf8_three_byte:
+    mov rdx, 2
+    and r8, 0b00001111
+    jmp read_utf8_common
+
+read_utf8_four_byte:
+    mov rdx, 3
+    and r8, 0b00000111
+
+read_utf8_common:
+    xor rax, rax
+    xor rdi, rdi
+    lea rsi, [utf8+1]
+    syscall
+read_utf8_loop:
+    shl r8, 6
+    movzx rax, byte [rsi]
+    and al, 0b00111111
+    add r8, rax
+    inc rsi
+    dec rdx
+    jnz read_utf8_loop
+    mov rax, r8
+    ret
+
+read_utf8_eof:
+    mov rax, -1
+    ret
+
+intlang_write_c:
+    cmp rax, 0x10000
+    jae write_utf8_four_byte
+    cmp rax, 0x800
+    jae write_utf8_three_byte
+    cmp rax, 0x80
+    jae write_utf8_two_byte
+
+    mov byte [utf8], al
+    mov rax, 1
+    mov rdi, 1
+    lea rsi, [utf8]
+    mov rdx, 1
+    syscall
+    ret
+
+write_utf8_two_byte:
+    mov rdx, 2
+    mov rdi, rax
+    shr rdi, 6
+    and rdi, 0b00011111
+    or rdi, 0b11000000
+    mov byte [utf8], dil
+    jmp write_utf8_common
+
+write_utf8_three_byte:
+    mov rdx, 3
+    mov rdi, rax
+    shr rdi, 12
+    and rdi, 0b00001111
+    or rdi, 0b11100000
+    mov byte [utf8], dil
+    jmp write_utf8_common
+
+write_utf8_four_byte:
+    mov rdx, 4
+    mov rdi, rax
+    shr rdi, 18
+    and rdi, 0b00000111
+    or rdi, 0b11110000
+    mov byte [utf8], dil
+
+write_utf8_common:
+    lea rsi, [utf8+rdx-1]
+
+write_utf8_loop:
+    mov rdi, rax
+    and rdi, 0b00111111
+    or rdi, 0b10000000
+    mov byte [rsi], dil
+    shr rax, 6
+    dec rsi
+    cmp rsi, utf8
+    jne write_utf8_loop
+
+    mov rax, 1
+    mov rdi, 1
+    lea rsi, [utf8]
+    syscall
+    ret
+
 intlang_free:
     push rbp
     mov rbp, rsp
     call free
     leave
     ret
+";
 
+const MAIN: &str = r"
 main:
     push rbp
     mov rbp, rsp
-"#;
+";
 
 const POSTAMBLE: &str = r"
     leave
@@ -95,6 +217,7 @@ fn run_command(cmd: &mut Command) {
 struct CodeGen {
     content: String,
     label_counter: usize,
+    strings: HashMap<Vec<char>, usize>,
 }
 
 pub fn generate_binary(ast: &SourceFile<'_>, target: &Path) {
@@ -103,14 +226,6 @@ pub fn generate_binary(ast: &SourceFile<'_>, target: &Path) {
     let asm_file = tmp_dir.path().join("program.asm");
 
     let mut content = String::new();
-
-    content.push_str(PREAMBLE);
-    content.push_str(
-        r"
-    call intlang_main
-",
-    );
-    content.push_str(POSTAMBLE);
 
     let mut codegen = CodeGen::default();
 
@@ -125,7 +240,28 @@ pub fn generate_binary(ast: &SourceFile<'_>, target: &Path) {
         codegen_function.generate_function(f);
     }
 
+    content.push_str(BUILTIN_DATA);
+    for s in &codegen.strings {
+        let _ = writeln!(
+            content,
+            r"
+    intlangstring_{} dq {}",
+            s.1,
+            iter::once(u64::try_from(s.0.len()).unwrap())
+                .chain(s.0.iter().map(|c| u64::from(*c)))
+                .join(", ")
+        );
+    }
+    content.push_str(BUILTIN_STATIC);
+    content.push_str(BUILTIN_FUNCTIONS);
     content.push_str(&codegen.content);
+    content.push_str(MAIN);
+    content.push_str(
+        r"
+    call intlang_main
+",
+    );
+    content.push_str(POSTAMBLE);
 
     println!("{content}");
 
@@ -210,7 +346,7 @@ fn determine_max_intermediate_count_and_variables<'src>(
                 )
             }
             Expression::Variable(name) => (0, HashSet::from([*name])),
-            Expression::Literal(_) => (0, HashSet::new()),
+            Expression::Literal(_) | Expression::String(_) => (0, HashSet::new()),
             Expression::FunctionCall(_, args) => {
                 let (inter, vars) = args.iter().map(expr_max).fold(
                     (0, HashSet::new()),
@@ -468,11 +604,12 @@ intlang_{name}:
                                 end: end_label.clone(),
                             },
                         );
-                        self.loop_entries_stack.push(LoopEntry {
-                            start: start_label.clone(),
-                            end: end_label.clone(),
-                        });
                     }
+
+                    self.loop_entries_stack.push(LoopEntry {
+                        start: start_label.clone(),
+                        end: end_label.clone(),
+                    });
 
                     let _ = write!(
                         self.content,
@@ -667,6 +804,30 @@ intlang_{name}:
                     r"
     mov rax, {literal}
     "
+                );
+            }
+            Expression::String(s) => {
+                let key = self.parent.strings.len();
+                let actual = *self
+                    .parent
+                    .strings
+                    .entry(
+                        s.iter()
+                            .flat_map(|c| match c {
+                                StringComponent::Literal(s) => Left(s.chars()),
+                                StringComponent::EscapedNewline => Right(iter::once('\n')),
+                                StringComponent::EscapedBackslash => Right(iter::once('\\')),
+                                StringComponent::EscapedDoubleQuote => Right(iter::once('\"')),
+                            })
+                            .collect(),
+                    )
+                    .or_insert(key);
+
+                let _ = write!(
+                    self.content,
+                    r"
+    mov rax, intlangstring_{actual}
+                    ",
                 );
             }
             Expression::Negation(expr) => {

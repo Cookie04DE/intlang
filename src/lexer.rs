@@ -1,10 +1,18 @@
 use chumsky::{
     IterParser, Parser,
-    primitive::{choice, just},
+    primitive::{any, choice, just},
     text::{ident, int, whitespace},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StringComponent<'src> {
+    Literal(&'src str),
+    EscapedBackslash,
+    EscapedNewline,
+    EscapedDoubleQuote,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Lexeme<'src> {
     Fn,
     Break,
@@ -21,6 +29,7 @@ pub enum Lexeme<'src> {
     OpenSquareBracket,
     CloseSquareBracket,
     Literal(i64),
+    String(Vec<StringComponent<'src>>),
     If,
     Else,
     While,
@@ -62,10 +71,29 @@ fn lexer<'src>() -> impl Parser<'src, &'src str, Vec<Lexeme<'src>>> {
         just(':').to(Lexeme::Colon),
         just('[').to(Lexeme::OpenSquareBracket),
         just(']').to(Lexeme::CloseSquareBracket),
+        any()
+            .delimited_by(just('\''), just('\''))
+            .map(|c: char| u32::from(c).into())
+            .map(Lexeme::Literal),
         int(10)
             .map(str::parse)
             .map(Result::unwrap)
             .map(Lexeme::Literal),
+        choice((
+            any()
+                .filter(|c| !matches!(c, '"' | '\\'))
+                .repeated()
+                .at_least(1)
+                .to_slice()
+                .map(StringComponent::Literal),
+            just("\\\\").to(StringComponent::EscapedBackslash),
+            just("\\n").to(StringComponent::EscapedNewline),
+            just("\\\"").to(StringComponent::EscapedDoubleQuote),
+        ))
+        .repeated()
+        .collect()
+        .map(Lexeme::String)
+        .delimited_by(just('"'), just('"')),
         just("!=").to(Lexeme::ExclamationPointEqualSign),
         just("==").to(Lexeme::DoubleEqualSign),
         // avoid overwhelming choice

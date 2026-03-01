@@ -17,8 +17,11 @@ However: There are no comments; only whitespace is permitted.
 Intlang has 5 kinds of statements:
 - expression statements; simply evaluate the expression
 - if statements; A condition (non zero is considered true); A block of statements to be executed if the condition holds; optionally a block of statements to be executed otherwise
+- break statements; break out of the nearest (or optionally named) loop
+- continue statements; starts next iteration of the nearest (or optionally named) loop
 - return statements; return the value of the given expression as the final value of the function call
-- while statements; continously run the body block of statements while the condition still holds
+- while statements; continously run the body block of statements while the condition still holds; can optionally be labeled
+- assignment statement; reassigns a variable or writes to memory using the indexing operator
 
 Every statement needs to end in a semicolon; even the if and while statements.
 
@@ -27,11 +30,21 @@ It has the following expression kinds:
 - variable access
 - function call
 - int literal
+- char literal (evaluates to the unicode codepoint)
+- string literal (evaluates to a pointer to read only memory containing the length prefixed codepoints)
 - negation (unary prefix -)
 - comparators and logical operators (<, <=, >, >=, ==, !=, !, |, &, ~, ^)
+- indexing operator (`p[n]`) that accesses the `n`th integer starting at `p`
 - arithmetic operators (+, -, *, /, %)
 
-Two functions are builtin: `read()` which returns a decimal integer read from stdin and `write(i)` which writes the given integer (and a newline) to stdout.
+A couple of functions are builtin:
+- `read()` returns a decimal integer read from stdin
+- `write(i)` writes the given integer (as a decimal with potential minus sign) and a newline to stdout
+- `read_c()` reads a utf-8 character from stdin and returns it's codepoint or `-1` in case of eof
+- `write_c(c)` writes the utf-8 character with the codepoint `c` to stdout
+- `malloc(n)` allocates heap memory for `n` integers and returns a pointer to that memory
+- `realloc(p, n)` resizes the heap memory starting at `p` to accommodate for `n` integers
+- `free(p)` deallocates the heap memory starting at `p`
 
 The intlang compiler is a toy in multiple aspects:
 - It has few safety checks (see [Safety checks](#safety-checks))
@@ -50,6 +63,9 @@ The compiler won't stop you from
 - not defining a main function
 - defining the main function with arguments
 - accessing uninitialized variables
+- accessing uninitialized memory
+- using heap memory after having freed it
+- double freeing heap memory
 
 ## Supported Systems
 Intlang only runs on x86-64 Linux. It needs both `gcc` and `nasm`.

@@ -123,6 +123,7 @@ fn expression_parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], Expressi
                     .delimited_by(just(Lexeme::OpenBrace), just(Lexeme::CloseBrace)),
                 select! {Lexeme::Ident(name) => Expression::Variable(name)},
                 select! {Lexeme::Literal(num) => Expression::Literal(num)},
+                select! {Lexeme::String(s) => Expression::String(s.into_iter().map(Into::into).collect())},
             ))
         }
         .pratt((

@@ -1,3 +1,5 @@
+use crate::lexer;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceFile<'src> {
     pub functions: Vec<Function<'src>>,
@@ -29,12 +31,32 @@ pub enum Statement<'src> {
     Assignment(Box<Expression<'src>>, Box<Expression<'src>>),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StringComponent<'src> {
+    Literal(&'src str),
+    EscapedBackslash,
+    EscapedNewline,
+    EscapedDoubleQuote,
+}
+
+impl<'src> From<lexer::StringComponent<'src>> for StringComponent<'src> {
+    fn from(value: lexer::StringComponent<'src>) -> Self {
+        match value {
+            lexer::StringComponent::Literal(s) => Self::Literal(s),
+            lexer::StringComponent::EscapedBackslash => Self::EscapedBackslash,
+            lexer::StringComponent::EscapedNewline => Self::EscapedNewline,
+            lexer::StringComponent::EscapedDoubleQuote => Self::EscapedDoubleQuote,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expression<'src> {
     Variable(&'src str),
     FunctionCall(&'src str, Vec<Expression<'src>>),
     Index(Box<Expression<'src>>, Box<Expression<'src>>),
     Literal(i64),
+    String(Vec<StringComponent<'src>>),
     Negation(Box<Expression<'src>>),
     Equal(Box<Expression<'src>>, Box<Expression<'src>>),
     NotEqual(Box<Expression<'src>>, Box<Expression<'src>>),
