@@ -1,7 +1,7 @@
 use chumsky::{
     IterParser, Parser,
     primitive::{any, choice, just},
-    text::{ident, int, newline},
+    text::{digits, ident, int, newline},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,10 +53,20 @@ pub enum Lexeme<'src> {
 
 fn escaped_char<'src>() -> impl Parser<'src, &'src str, char> {
     just('\\').ignore_then(choice((
+        just('0').to('\0'),
+        just('t').to('\t'),
+        just('r').to('\r'),
         just('\\').to('\\'),
         just('n').to('\n'),
         just('"').to('"'),
         just('\'').to('\''),
+        just('x').ignore_then(
+            digits(8)
+                .exactly(1)
+                .then(digits(16).exactly(1))
+                .to_slice()
+                .map(|s| char::try_from(u32::from_str_radix(s, 16).unwrap()).unwrap()),
+        ),
     )))
 }
 
