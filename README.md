@@ -11,7 +11,7 @@ These functions contain statements.
 
 The syntax is C-like.
 
-However: There are no comments; only whitespace is permitted.
+The language supports C-style comments. Use `//` to start a line comment, `/*` to start a block comment and `*/` to end one.
 
 ## Statements
 Intlang has 5 kinds of statements:

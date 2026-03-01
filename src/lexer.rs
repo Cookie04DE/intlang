@@ -1,7 +1,7 @@
 use chumsky::{
     IterParser, Parser,
     primitive::{any, choice, just},
-    text::{ident, int, whitespace},
+    text::{ident, int, newline},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,6 +57,20 @@ fn escaped_char<'src>() -> impl Parser<'src, &'src str, char> {
         just('"').to('"'),
         just('\'').to('\''),
     )))
+}
+
+fn whitespace_or_comments<'src>() -> impl Parser<'src, &'src str, ()> {
+    choice((
+        any().filter(|c: &char| c.is_whitespace()).ignored(),
+        just("//")
+            .then(any().and_is(newline().not()).repeated())
+            .ignored(),
+        just("/*")
+            .then(any().and_is(just("*/").not()).repeated())
+            .then(just("*/"))
+            .ignored(),
+    ))
+    .repeated()
 }
 
 fn lexer<'src>() -> impl Parser<'src, &'src str, Vec<Lexeme<'src>>> {
@@ -121,7 +135,7 @@ fn lexer<'src>() -> impl Parser<'src, &'src str, Vec<Lexeme<'src>>> {
             just('%').to(Lexeme::PercentSign),
         )),
     ))
-    .separated_by(whitespace())
+    .separated_by(whitespace_or_comments())
     .allow_leading()
     .allow_trailing()
     .collect()
