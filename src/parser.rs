@@ -3,8 +3,8 @@ use std::convert::identity;
 use chumsky::{
     IterParser, Parser,
     pratt::{infix, left, postfix, prefix},
-    prelude::{choice, recursive},
-    primitive::just,
+    primitive::{choice, empty, just},
+    recursive::recursive,
     select,
 };
 use either::Either::{Left, Right};
@@ -37,13 +37,23 @@ fn parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], SourceFile<'src>> +
         })
 }
 
+fn literal<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], i64> + Clone {
+    choice((
+        just(Lexeme::Minus).to(true),
+        just(Lexeme::PlusSign).to(false),
+        empty().to(false),
+    ))
+    .then(select! {Lexeme::Literal(num) => num})
+    .map(|(negative, num)| if negative { -num } else { num })
+}
+
 fn constant_parser<'src>()
 -> impl Parser<'src, &'src [Lexeme<'src>], (&'src str, ConstantValue<'src>)> + Clone {
     just(Lexeme::Const)
         .ignore_then(select! {Lexeme::Ident(name) => name})
         .then_ignore(just(Lexeme::EqualSign))
         .then(
-            select! {Lexeme::Literal(i) => ConstantValue::Integer(i)}
+            literal().map(ConstantValue::Integer)
                 .or(select! {Lexeme::String(s) => ConstantValue::String(s.into_iter().map(Into::into).collect())}),
         )
         .then_ignore(just(Lexeme::Semicolon))
@@ -145,8 +155,8 @@ fn expression_parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], Expressi
                 expression_parser
                     .clone()
                     .delimited_by(just(Lexeme::OpenBrace), just(Lexeme::CloseBrace)),
+                literal().map(Expression::Literal),
                 select! {Lexeme::Ident(name) => Expression::Ident(name)},
-                select! {Lexeme::Literal(num) => Expression::Literal(num)},
                 select! {Lexeme::String(s) => Expression::String(s.into_iter().map(Into::into).collect())},
             ))
         }
