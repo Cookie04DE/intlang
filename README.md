@@ -21,7 +21,6 @@ Intlang has 5 kinds of statements:
 - continue statements; starts next iteration of the nearest (or optionally named) loop
 - return statements; return the value of the given expression as the final value of the function call
 - while statements; continously run the body block of statements while the condition still holds; can optionally be labeled
-- assignment statement; reassigns a variable or writes to memory using the indexing operator
 
 Every statement needs to end in a semicolon; even the if and while statements.
 
@@ -35,7 +34,8 @@ It has the following expression kinds:
 - negation (unary prefix -)
 - comparators and logical operators (<, <=, >, >=, ==, !=, !, |, &, ~, ^)
 - indexing operator (`p[n]`) that accesses the `n`th integer starting at `p`
-- arithmetic operators (+, -, *, /, %)
+- arithmetic operators (+, -, \*, /, %)
+- assignment expression; reassigns a variable or writes to memory using the indexing operator and evaluates to the written value
 
 A couple of functions are builtin:
 - `read()` returns a decimal integer read from stdin

@@ -35,7 +35,6 @@ pub enum Statement<'src> {
         condition: Expression<'src>,
         body: Vec<Statement<'src>>,
     },
-    Assignment(Box<Expression<'src>>, Box<Expression<'src>>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,4 +76,5 @@ pub enum Expression<'src> {
     Mul(Box<Expression<'src>>, Box<Expression<'src>>),
     Div(Box<Expression<'src>>, Box<Expression<'src>>),
     Mod(Box<Expression<'src>>, Box<Expression<'src>>),
+    Assignment(Box<Expression<'src>>, Box<Expression<'src>>),
 }

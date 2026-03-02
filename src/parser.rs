@@ -2,7 +2,7 @@ use std::convert::identity;
 
 use chumsky::{
     IterParser, Parser,
-    pratt::{infix, left, postfix, prefix},
+    pratt::{infix, left, postfix, prefix, right},
     primitive::{choice, empty, just},
     recursive::recursive,
     select,
@@ -128,10 +128,6 @@ fn statement_parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], Statement
                     condition,
                     body,
                 }),
-            expression_parser()
-                .then_ignore(just(Lexeme::EqualSign))
-                .then(expression_parser())
-                .map(|(left, right)| Statement::Assignment(Box::new(left), Box::new(right))),
             expression_parser().map(Statement::Expression),
         ))
         .then_ignore(just(Lexeme::Semicolon))
@@ -166,71 +162,74 @@ fn expression_parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], Expressi
             ))
         }
         .pratt((
-            infix(left(0), just(Lexeme::OrSign), |left, _, right, _| {
+            infix(right(0), just(Lexeme::EqualSign), |left, _, right, _| {
+                Expression::Assignment(Box::new(left), Box::new(right))
+            }),
+            infix(left(1), just(Lexeme::OrSign), |left, _, right, _| {
                 Expression::Or(Box::new(left), Box::new(right))
             }),
-            infix(left(1), just(Lexeme::Caret), |left, _, right, _| {
+            infix(left(2), just(Lexeme::Caret), |left, _, right, _| {
                 Expression::Xor(Box::new(left), Box::new(right))
             }),
-            infix(left(2), just(Lexeme::AndSign), |left, _, right, _| {
+            infix(left(3), just(Lexeme::AndSign), |left, _, right, _| {
                 Expression::And(Box::new(left), Box::new(right))
             }),
             infix(
-                left(3),
+                left(4),
                 just(Lexeme::DoubleEqualSign),
                 |left, _, right, _| Expression::Equal(Box::new(left), Box::new(right)),
             ),
             infix(
-                left(3),
+                left(4),
                 just(Lexeme::ExclamationPointEqualSign),
                 |left, _, right, _| Expression::NotEqual(Box::new(left), Box::new(right)),
             ),
-            infix(left(4), just(Lexeme::LessThanSign), |left, _, right, _| {
+            infix(left(5), just(Lexeme::LessThanSign), |left, _, right, _| {
                 Expression::LessThan(Box::new(left), Box::new(right))
             }),
             infix(
-                left(4),
+                left(5),
                 just(Lexeme::LessThanSignEqualSign),
                 |left, _, right, _| Expression::LessThanOrEqualTo(Box::new(left), Box::new(right)),
             ),
             infix(
-                left(4),
+                left(5),
                 just(Lexeme::GreaterThanSign),
                 |left, _, right, _| Expression::GreaterThan(Box::new(left), Box::new(right)),
             ),
             infix(
-                left(4),
+                left(5),
                 just(Lexeme::GreaterThanSignEqualSign),
                 |left, _, right, _| {
                     Expression::GreaterThanOrEqualTo(Box::new(left), Box::new(right))
                 },
             ),
-            infix(left(5), just(Lexeme::PlusSign), |left, _, right, _| {
+            infix(left(6), just(Lexeme::PlusSign), |left, _, right, _| {
                 Expression::Add(Box::new(left), Box::new(right))
             }),
-            infix(left(5), just(Lexeme::MinusSign), |left, _, right, _| {
+            infix(left(6), just(Lexeme::MinusSign), |left, _, right, _| {
                 Expression::Sub(Box::new(left), Box::new(right))
             }),
-            infix(left(6), just(Lexeme::Asterisk), |left, _, right, _| {
+            infix(left(7), just(Lexeme::Asterisk), |left, _, right, _| {
                 Expression::Mul(Box::new(left), Box::new(right))
             }),
-            infix(left(6), just(Lexeme::Slash), |left, _, right, _| {
+            infix(left(7), just(Lexeme::Slash), |left, _, right, _| {
                 Expression::Div(Box::new(left), Box::new(right))
             }),
-            infix(left(6), just(Lexeme::PercentSign), |left, _, right, _| {
+            infix(left(7), just(Lexeme::PercentSign), |left, _, right, _| {
                 Expression::Mod(Box::new(left), Box::new(right))
             }),
-            prefix(7, just(Lexeme::MinusSign), |_, expr, _| {
+            prefix(8, just(Lexeme::MinusSign), |_, expr, _| {
                 Expression::Negation(Box::new(expr))
             }),
-            prefix(7, just(Lexeme::ExclamationPoint), |_, expr, _| {
+            prefix(8, just(Lexeme::ExclamationPoint), |_, expr, _| {
                 Expression::LogicalNot(Box::new(expr))
             }),
-            prefix(7, just(Lexeme::Tilde), |_, expr, _| {
+            prefix(8, just(Lexeme::Tilde), |_, expr, _| {
                 Expression::BitwiseNot(Box::new(expr))
             }),
             postfix(
-                8,
+                9,
                 expression_parser.delimited_by(
                     just(Lexeme::OpenSquareBracket),
                     just(Lexeme::CloseSquareBracket),

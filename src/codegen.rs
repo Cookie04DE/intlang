@@ -447,6 +447,28 @@ impl CodeGen {
                 Expression::Negation(expr)
                 | Expression::LogicalNot(expr)
                 | Expression::BitwiseNot(expr) => expr_max(code_gen, expr),
+                Expression::Assignment(left, right) => match &**left {
+                    Expression::Ident(var) => {
+                        let (expr_inter, mut expr_vars) = expr_max(code_gen, right);
+
+                        expr_vars.insert(var);
+
+                        (expr_inter, expr_vars)
+                    }
+                    Expression::Index(base, offset) => {
+                        let (base_inter, mut base_vars) = expr_max(code_gen, base);
+                        let (offset_inter, offset_vars) = expr_max(code_gen, offset);
+                        let (right_inter, right_vars) = expr_max(code_gen, right);
+
+                        base_vars.extend(offset_vars);
+                        base_vars.extend(right_vars);
+
+                        (base_inter.max(offset_inter).max(right_inter) + 2, base_vars)
+                    }
+                    _ => panic!(
+                        "Unsupported expression for assignment: {left:?}; only index or variable are supported"
+                    ),
+                },
             }
         }
 
@@ -487,28 +509,6 @@ impl CodeGen {
                     (condition_inter.max(body_inter), condition_vars)
                 }
                 Statement::Expression(expr) | Statement::Return(expr) => expr_max(code_gen, expr),
-                Statement::Assignment(left, right) => match &**left {
-                    Expression::Ident(var) => {
-                        let (expr_inter, mut expr_vars) = expr_max(code_gen, right);
-
-                        expr_vars.insert(var);
-
-                        (expr_inter, expr_vars)
-                    }
-                    Expression::Index(base, offset) => {
-                        let (base_inter, mut base_vars) = expr_max(code_gen, base);
-                        let (offset_inter, offset_vars) = expr_max(code_gen, offset);
-                        let (right_inter, right_vars) = expr_max(code_gen, right);
-
-                        base_vars.extend(offset_vars);
-                        base_vars.extend(right_vars);
-
-                        (base_inter.max(offset_inter).max(right_inter) + 2, base_vars)
-                    }
-                    _ => panic!(
-                        "Unsupported expression for assignment: {left:?}; only index or variable are supported"
-                    ),
-                },
             }
         }
 
@@ -638,41 +638,6 @@ intlang_{name}:
         for stm in stms {
             match stm {
                 Statement::Expression(expr) => self.generate_expression(expr),
-                Statement::Assignment(left, right) => match &**left {
-                    Expression::Ident(name) => {
-                        self.generate_expression(right);
-                        let offset = self.get_var_offset(name);
-                        let _ = write!(
-                            self.content,
-                            r"
-    mov [rbp-{offset}], rax
-"
-                        );
-                    }
-                    Expression::Index(base, offset) => {
-                        self.generate_expression(base);
-                        self.generate_intermediate_save();
-                        let base_offset = self.get_intermediate_offset();
-                        self.intermediate_counter += 1;
-                        self.generate_expression(offset);
-                        self.generate_intermediate_save();
-                        let offset_offset = self.get_intermediate_offset();
-                        self.intermediate_counter += 1;
-                        self.generate_expression(right);
-                        self.intermediate_counter -= 2;
-                        let _ = write!(
-                            self.content,
-                            r"
-    mov rdx, [rbp-{base_offset}]
-    mov rsi, [rbp-{offset_offset}]
-    mov [rdx + rsi * 8], rax
-",
-                        );
-                    }
-                    _ => panic!(
-                        "Unsupported expression for assignment: {left:?}; only index or variable are supported"
-                    ),
-                },
                 Statement::If {
                     condition,
                     then,
@@ -1077,6 +1042,41 @@ intlang_{name}:
 ",
                 );
             }
+            Expression::Assignment(left, right) => match &**left {
+                Expression::Ident(name) => {
+                    self.generate_expression(right);
+                    let offset = self.get_var_offset(name);
+                    let _ = write!(
+                        self.content,
+                        r"
+    mov [rbp-{offset}], rax
+"
+                    );
+                }
+                Expression::Index(base, offset) => {
+                    self.generate_expression(base);
+                    self.generate_intermediate_save();
+                    let base_offset = self.get_intermediate_offset();
+                    self.intermediate_counter += 1;
+                    self.generate_expression(offset);
+                    self.generate_intermediate_save();
+                    let offset_offset = self.get_intermediate_offset();
+                    self.intermediate_counter += 1;
+                    self.generate_expression(right);
+                    self.intermediate_counter -= 2;
+                    let _ = write!(
+                        self.content,
+                        r"
+    mov rdx, [rbp-{base_offset}]
+    mov rsi, [rbp-{offset_offset}]
+    mov [rdx + rsi * 8], rax
+",
+                    );
+                }
+                _ => panic!(
+                    "Unsupported expression for assignment: {left:?}; only index or variable are supported"
+                ),
+            },
         }
     }
 }
