@@ -185,24 +185,24 @@ fn expression_parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], Expressi
                 just(Lexeme::ExclamationPointEqualSign),
                 |left, _, right, _| Expression::NotEqual(Box::new(left), Box::new(right)),
             ),
-            infix(left(4), just(Lexeme::LessThenSign), |left, _, right, _| {
-                Expression::LessThen(Box::new(left), Box::new(right))
+            infix(left(4), just(Lexeme::LessThanSign), |left, _, right, _| {
+                Expression::LessThan(Box::new(left), Box::new(right))
             }),
             infix(
                 left(4),
-                just(Lexeme::LessThenSignEqualSign),
-                |left, _, right, _| Expression::LessThenOrEqualTo(Box::new(left), Box::new(right)),
+                just(Lexeme::LessThanSignEqualSign),
+                |left, _, right, _| Expression::LessThanOrEqualTo(Box::new(left), Box::new(right)),
             ),
             infix(
                 left(4),
-                just(Lexeme::GreaterThenSign),
-                |left, _, right, _| Expression::GreaterThen(Box::new(left), Box::new(right)),
+                just(Lexeme::GreaterThanSign),
+                |left, _, right, _| Expression::GreaterThan(Box::new(left), Box::new(right)),
             ),
             infix(
                 left(4),
-                just(Lexeme::GreaterThenSignEqualSign),
+                just(Lexeme::GreaterThanSignEqualSign),
                 |left, _, right, _| {
-                    Expression::GreaterThenOrEqualTo(Box::new(left), Box::new(right))
+                    Expression::GreaterThanOrEqualTo(Box::new(left), Box::new(right))
                 },
             ),
             infix(left(5), just(Lexeme::PlusSign), |left, _, right, _| {

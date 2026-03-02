@@ -404,10 +404,10 @@ impl CodeGen {
                 | Expression::Div(left, right)
                 | Expression::And(left, right)
                 | Expression::Equal(left, right)
-                | Expression::GreaterThen(left, right)
-                | Expression::GreaterThenOrEqualTo(left, right)
-                | Expression::LessThen(left, right)
-                | Expression::LessThenOrEqualTo(left, right)
+                | Expression::GreaterThan(left, right)
+                | Expression::GreaterThanOrEqualTo(left, right)
+                | Expression::LessThan(left, right)
+                | Expression::LessThanOrEqualTo(left, right)
                 | Expression::Mod(left, right)
                 | Expression::Mul(left, right)
                 | Expression::NotEqual(left, right)
@@ -959,7 +959,7 @@ intlang_{name}:
 ",
             ),
 
-            Expression::LessThen(first, second) => gen_double(
+            Expression::LessThan(first, second) => gen_double(
                 self,
                 second,
                 first,
@@ -972,7 +972,7 @@ intlang_{name}:
 ",
             ),
 
-            Expression::LessThenOrEqualTo(first, second) => gen_double(
+            Expression::LessThanOrEqualTo(first, second) => gen_double(
                 self,
                 second,
                 first,
@@ -985,7 +985,7 @@ intlang_{name}:
 ",
             ),
 
-            Expression::GreaterThen(first, second) => gen_double(
+            Expression::GreaterThan(first, second) => gen_double(
                 self,
                 second,
                 first,
@@ -998,7 +998,7 @@ intlang_{name}:
 ",
             ),
 
-            Expression::GreaterThenOrEqualTo(first, second) => gen_double(
+            Expression::GreaterThanOrEqualTo(first, second) => gen_double(
                 self,
                 second,
                 first,
