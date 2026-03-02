@@ -90,19 +90,24 @@ fn statement_block_parser<'src>(
 fn statement_parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], Statement<'src>> + Clone {
     recursive(|statement_parser| {
         choice((
-            just(Lexeme::If)
-                .ignore_then(braced_expression_parser())
-                .then(statement_block_parser(statement_parser.clone()))
-                .then(
-                    just(Lexeme::Else)
-                        .ignore_then(statement_block_parser(statement_parser.clone()))
-                        .or_not(),
-                )
-                .map(|((condition, then), otherwise)| Statement::If {
-                    condition,
-                    then,
-                    otherwise: otherwise.unwrap_or_default(),
-                }),
+            recursive(|if_parser| {
+                just(Lexeme::If)
+                    .ignore_then(braced_expression_parser())
+                    .then(statement_block_parser(statement_parser.clone()))
+                    .then(
+                        just(Lexeme::Else)
+                            .ignore_then(
+                                statement_block_parser(statement_parser.clone())
+                                    .or(if_parser.map(|if_stm| vec![if_stm])),
+                            )
+                            .or_not(),
+                    )
+                    .map(|((condition, then), otherwise)| Statement::If {
+                        condition,
+                        then,
+                        otherwise: otherwise.unwrap_or_default(),
+                    })
+            }),
             just(Lexeme::Break)
                 .ignore_then(select! {Lexeme::Ident(name) => name}.or_not())
                 .map(Statement::Break),
