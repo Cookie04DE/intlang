@@ -39,7 +39,7 @@ fn parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], SourceFile<'src>> +
 
 fn literal<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], i64> + Clone {
     choice((
-        just(Lexeme::Minus).to(true),
+        just(Lexeme::MinusSign).to(true),
         just(Lexeme::PlusSign).to(false),
         empty().to(false),
     ))
@@ -208,7 +208,7 @@ fn expression_parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], Expressi
             infix(left(5), just(Lexeme::PlusSign), |left, _, right, _| {
                 Expression::Add(Box::new(left), Box::new(right))
             }),
-            infix(left(5), just(Lexeme::Minus), |left, _, right, _| {
+            infix(left(5), just(Lexeme::MinusSign), |left, _, right, _| {
                 Expression::Sub(Box::new(left), Box::new(right))
             }),
             infix(left(6), just(Lexeme::Asterisk), |left, _, right, _| {
@@ -220,7 +220,7 @@ fn expression_parser<'src>() -> impl Parser<'src, &'src [Lexeme<'src>], Expressi
             infix(left(6), just(Lexeme::PercentSign), |left, _, right, _| {
                 Expression::Mod(Box::new(left), Box::new(right))
             }),
-            prefix(7, just(Lexeme::Minus), |_, expr, _| {
+            prefix(7, just(Lexeme::MinusSign), |_, expr, _| {
                 Expression::Negation(Box::new(expr))
             }),
             prefix(7, just(Lexeme::ExclamationPoint), |_, expr, _| {
