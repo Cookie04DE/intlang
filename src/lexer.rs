@@ -1,7 +1,7 @@
 use chumsky::{
     IterParser, Parser,
     primitive::{any, choice, just},
-    text::{digits, ident, int, newline},
+    text::{digits, ident, int, keyword, newline},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,14 +86,14 @@ fn whitespace_or_comments<'src>() -> impl Parser<'src, &'src str, ()> {
 
 fn lexer<'src>() -> impl Parser<'src, &'src str, Vec<Lexeme<'src>>> {
     choice((
-        just("fn").to(Lexeme::Fn),
-        just("const").to(Lexeme::Const),
-        just("return").to(Lexeme::Return),
-        just("break").to(Lexeme::Break),
-        just("continue").to(Lexeme::Continue),
-        just("if").to(Lexeme::If),
-        just("else").to(Lexeme::Else),
-        just("while").to(Lexeme::While),
+        keyword("fn").to(Lexeme::Fn),
+        keyword("const").to(Lexeme::Const),
+        keyword("return").to(Lexeme::Return),
+        keyword("break").to(Lexeme::Break),
+        keyword("continue").to(Lexeme::Continue),
+        keyword("if").to(Lexeme::If),
+        keyword("else").to(Lexeme::Else),
+        keyword("while").to(Lexeme::While),
         ident().map(Lexeme::Ident),
         just('(').to(Lexeme::OpenBrace),
         just(')').to(Lexeme::CloseBrace),
