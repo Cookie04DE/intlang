@@ -753,10 +753,10 @@ intlang_{name}:
             second: &Expression<'_>,
             instr: &str,
         ) {
-            cgf.generate_expression(second);
+            cgf.generate_expression(first);
             cgf.generate_intermediate_save();
             cgf.intermediate_counter += 1;
-            cgf.generate_expression(first);
+            cgf.generate_expression(second);
             cgf.intermediate_counter -= 1;
             cgf.generate_intermediate_restore();
             cgf.content.push_str(instr);
@@ -926,8 +926,8 @@ intlang_{name}:
 
             Expression::LessThan(first, second) => gen_double(
                 self,
-                second,
                 first,
+                second,
                 r"
     xchg rax, rdx
     mov rsi, rax
@@ -939,8 +939,8 @@ intlang_{name}:
 
             Expression::LessThanOrEqualTo(first, second) => gen_double(
                 self,
-                second,
                 first,
+                second,
                 r"
     xchg rax, rdx
     mov rsi, rax
@@ -952,8 +952,8 @@ intlang_{name}:
 
             Expression::GreaterThan(first, second) => gen_double(
                 self,
-                second,
                 first,
+                second,
                 r"
     xchg rax, rdx
     mov rsi, rax
@@ -965,8 +965,8 @@ intlang_{name}:
 
             Expression::GreaterThanOrEqualTo(first, second) => gen_double(
                 self,
-                second,
                 first,
+                second,
                 r"
     xchg rax, rdx
     mov rsi, rax
@@ -1007,8 +1007,8 @@ intlang_{name}:
 
             Expression::Sub(first, second) => gen_double(
                 self,
-                second,
                 first,
+                second,
                 r"
     xchg rax, rdx
     sub rax, rdx
