@@ -14,6 +14,8 @@ use tempfile::TempDir;
 use crate::ast::{ConstantValue, Expression, Function, SourceFile, Statement, StringComponent};
 
 const BUILTIN_DATA: &str = r#"
+default rel
+
 section .data
     input_format db "%ld", 0
     output_format db "%ld", 10, 0
