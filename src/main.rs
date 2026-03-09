@@ -11,9 +11,7 @@ fn main() {
         let path = Path::new(&file);
         let source_code = fs::read_to_string(path).expect("failed reading source code");
         let lexemes = lexer::lex(&source_code);
-        dbg!(&lexemes);
         let ast = parser::parse(&lexemes);
-        dbg!(&ast);
         codegen::generate_binary(&ast, &path.with_extension(""));
     }
 }

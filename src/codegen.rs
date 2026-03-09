@@ -349,8 +349,6 @@ pub fn generate_binary(ast: &SourceFile<'_>, target: &Path) {
     );
     content.push_str(POSTAMBLE);
 
-    println!("{content}");
-
     fs::write(&asm_file, &content).expect("failed writing temp assembly file");
 
     run_command(
