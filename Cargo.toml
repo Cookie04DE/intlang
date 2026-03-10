@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 chumsky = { version = "1.0.0-alpha.8", features = ["pratt"] }
+clap = { version = "4.5.60", features = ["derive"] }
 either = "1.15.0"
 itertools = "0.14.0"
 tempfile = "3.19.1"

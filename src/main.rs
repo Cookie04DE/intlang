@@ -1,17 +1,31 @@
 #![deny(clippy::pedantic)]
-use std::{env::args, fs, path::Path};
+use std::{fs, path::PathBuf};
+
+use clap::Parser;
 
 pub(crate) mod ast;
 mod codegen;
 mod lexer;
 mod parser;
 
+/// The stage0 intlang compiler written in Rust
+#[derive(Debug, Parser)]
+struct Args {
+    /// The intlang source file to compile
+    source_file: PathBuf,
+    /// The target binary path
+    target_path: Option<PathBuf>,
+}
+
 fn main() {
-    for file in args().skip(1) {
-        let path = Path::new(&file);
-        let source_code = fs::read_to_string(path).expect("failed reading source code");
-        let lexemes = lexer::lex(&source_code);
-        let ast = parser::parse(&lexemes);
-        codegen::generate_binary(&ast, &path.with_extension(""));
-    }
+    let args = Args::parse();
+    let source_code = fs::read_to_string(&args.source_file).expect("failed reading source code");
+    let lexemes = lexer::lex(&source_code);
+    let ast = parser::parse(&lexemes);
+    codegen::generate_binary(
+        &ast,
+        &args
+            .target_path
+            .unwrap_or(args.source_file.with_extension("")),
+    );
 }
