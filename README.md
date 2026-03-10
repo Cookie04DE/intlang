@@ -1,8 +1,13 @@
-# Intlang - A toy programming language with a toy compiler
+# Intlang - A toy programming language with a toy self hosting compiler
 
 ## Introduction
-Intlang is a toy programming language with C-like syntax.
+Intlang is a toy programming language with C-like syntax and a toy self hosting compiler that emits x86-64 assembly.
+
 It's only datatype is the 64 bit signed integer.
+
+Contained in this repository is the stage0 intlang compiler that is written in Rust.
+
+The actual self hosting compiler can be found in [`ilc.il`](https://github.com/Cookie04DE/intlang/tree/master/ilc.il).
 
 ## Language structure
 An Intlang program is made of functions with names and optionally parameters as well as constants.
@@ -76,7 +81,7 @@ Intlang only runs on x86-64 Linux. It needs both `gcc` and `nasm`.
 See [`examples/`](https://github.com/Cookie04DE/intlang/tree/master/examples) for a list of example Intlang programs.
 
 ## Usage
-Compile this binary and run it on one of the examples (or your own program).
+To use the stage0 compiler, compile the rust binary and run it on one of the examples (or your own program).
 
 `$ intlang calc.il`
 
@@ -85,3 +90,11 @@ In case of success there should now be an executable with the same name (but no 
 Now you can run it.
 
 `$ ./calc`
+
+To bootstrap the stage2 ilc you can run [`bootstrap.sh`](https://github.com/Cookie04DE/intlang/tree/master/bootstrap.sh).
+
+`$ ./bootstrap.sh`
+
+To compile an intlang program with it or any previous stage use [`ilc.sh`](https://github.com/Cookie04DE/intlang/tree/master/ilc.sh).
+
+`$ ./ilc.sh ilc.il`
