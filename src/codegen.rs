@@ -361,7 +361,7 @@ pub fn generate_binary(ast: &SourceFile<'_>, target: &Path) {
 
     run_command(
         Command::new("gcc")
-            .args(["-no-pie", "-o", "program", "program.o"])
+            .args(["-no-pie", "-z", "noexecstack", "-o", "program", "program.o"])
             .current_dir(&tmp_dir),
     );
 
