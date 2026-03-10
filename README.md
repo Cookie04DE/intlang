@@ -7,7 +7,7 @@ It's only datatype is the 64 bit signed integer.
 
 Contained in this repository is the stage0 intlang compiler that is written in Rust.
 
-The actual self hosting compiler can be found in [`ilc.il`](https://github.com/Cookie04DE/intlang/tree/master/ilc.il).
+The actual self hosting compiler can be found in [`ilc.il`](https://github.com/Cookie04DE/intlang/blob/master/ilc.il).
 
 ## Language structure
 An Intlang program is made of functions with names and optionally parameters as well as constants.
@@ -91,10 +91,10 @@ Now you can run it.
 
 `$ ./calc`
 
-To bootstrap the stage2 ilc you can run [`bootstrap.sh`](https://github.com/Cookie04DE/intlang/tree/master/bootstrap.sh).
+To bootstrap the stage2 ilc you can run [`bootstrap.sh`](https://github.com/Cookie04DE/intlang/blob/master/bootstrap.sh).
 
 `$ ./bootstrap.sh`
 
-To compile an intlang program with it or any previous stage use [`ilc.sh`](https://github.com/Cookie04DE/intlang/tree/master/ilc.sh).
+To compile an intlang program with it or any previous stage use [`ilc.sh`](https://github.com/Cookie04DE/intlang/blob/master/ilc.sh).
 
 `$ ./ilc.sh ilc.il`
