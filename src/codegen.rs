@@ -127,6 +127,7 @@ read_utf8_eof:
     ret
 
 intlang_write_c:
+    mov rax, rdi
     cmp rax, 0x10000
     jae write_utf8_four_byte
     cmp rax, 0x800
