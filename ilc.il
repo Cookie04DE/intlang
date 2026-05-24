@@ -46,11 +46,12 @@ fn vec_push(v, i) {
 fn vec_clone(v) {
     v2 = new_vec();
     v2[s_vec_capacity] = v[s_vec_count];
+    v2[s_vec_count] = v[s_vec_count];
     if(v[s_vec_count] > 0) {
         v2[s_vec_data] = malloc(v[s_vec_count]);
         i = 0;
         while(i < v[s_vec_count]) {
-            vec_push(v2, v[s_vec_data][i]);
+            v2[s_vec_data][i] = v[s_vec_data][i];
             i = i + 1;
         };
     };
@@ -689,11 +690,11 @@ fn prefix_operator_binding_power(operator_token) {
 
 fn prefix_expression(operator_token, operand) {
     if(operator_token == token_minus_sign) {
-        return new_expression_negation(operand);
+        return new_expression_unary_operation(operand, unary_operator_negation);
     } else if(operator_token == token_exclamation_point) {
-        return new_expression_logical_not(operand);
+        return new_expression_unary_operation(operand, unary_operator_logical_not);
     } else if(operator_token == token_tilde) {
-        return new_expression_bitwise_not(operand);
+        return new_expression_unary_operation(operand, unary_operator_bitwise_not);
     };
 }
 
@@ -748,35 +749,35 @@ fn infix_operator_binding_power(operator_token) {
 
 fn infix_expression(lhs, operator_token, rhs) {
     if(operator_token == token_equal_sign) {
-        return new_expression_assignment(lhs, rhs);
+        return new_expression_binary_operation(lhs, rhs, binary_operator_assignment);
     } else if(operator_token == token_or_sign) {
-        return new_expression_or(lhs, rhs);
+        return new_expression_binary_operation(lhs, rhs, binary_operator_or);
     } else if(operator_token == token_caret) {
-        return new_expression_xor(lhs, rhs);
+        return new_expression_binary_operation(lhs, rhs, binary_operator_xor);
     } else if(operator_token == token_and_sign) {
-        return new_expression_and(lhs, rhs);
+        return new_expression_binary_operation(lhs, rhs, binary_operator_and);
     } else if(operator_token == token_double_equal_sign) {
-        return new_expression_equal(lhs, rhs);
+        return new_expression_binary_operation(lhs, rhs, binary_operator_equal);
     } else if(operator_token == token_exclamation_point_equal_sign) {
-        return new_expression_not_equal(lhs, rhs);
+        return new_expression_binary_operation(lhs, rhs, binary_operator_not_equal);
     } else if(operator_token == token_less_than_sign) {
-        return new_expression_less_than(lhs, rhs);
+        return new_expression_binary_operation(lhs, rhs, binary_operator_less_than);
     } else if(operator_token == token_less_than_sign_equal_sign) {
-        return new_expression_less_than_or_equal_to(lhs, rhs);
+        return new_expression_binary_operation(lhs, rhs, binary_operator_less_than_or_equal_to);
     } else if(operator_token == token_greater_than_sign) {
-        return new_expression_greater_than(lhs, rhs);
+        return new_expression_binary_operation(lhs, rhs, binary_operator_greater_than);
     } else if(operator_token == token_greater_than_sign_equal_sign) {
-        return new_expression_greater_than_or_equal_to(lhs, rhs);
+        return new_expression_binary_operation(lhs, rhs, binary_operator_greater_than_or_equal_to);
     } else if(operator_token == token_plus_sign) {
-        return new_expression_add(lhs, rhs);
+        return new_expression_binary_operation(lhs, rhs, binary_operator_add);
     } else if(operator_token == token_minus_sign) {
-        return new_expression_sub(lhs, rhs);
+        return new_expression_binary_operation(lhs, rhs, binary_operator_sub);
     } else if(operator_token == token_asterisk) {
-        return new_expression_mul(lhs, rhs);
+        return new_expression_binary_operation(lhs, rhs, binary_operator_mul);
     } else if(operator_token == token_slash) {
-        return new_expression_div(lhs, rhs);
+        return new_expression_binary_operation(lhs, rhs, binary_operator_div);
     } else if(operator_token == token_percent_sign) {
-        return new_expression_mod(lhs, rhs);
+        return new_expression_binary_operation(lhs, rhs, binary_operator_mod);
     };
 }
 
@@ -816,7 +817,7 @@ fn parser_pratt_parse_expression(p, min_power) {
                 expression_free(lhs);
                 return parser_parse_fail;
             };
-            lhs = new_expression_index(lhs, index);
+            lhs = new_expression_binary_operation(lhs, index, binary_operator_index);
             if(parser_next_token(p) != token_close_square) {
                 expression_free(lhs);
                 return parser_parse_fail;
@@ -956,28 +957,71 @@ fn expression_function_call_free(e) {
     return 0;
 }
 
-const expression_index = 2;
-const s_expression_index_size = 2;
-const s_expression_index_base = 0;
-const s_expression_index_index = 1;
+const expression_binary_expression = 2;
+const s_expression_binary_operation_size = 3;
+const s_expression_binary_operation_left = 0;
+const s_expression_binary_operation_right = 1;
+const s_expression_binary_operation_operator = 2;
 
-fn new_expression_index(base, index) {
-    e = malloc(s_expression_index_size);
-    e[s_expression_index_base] = base;
-    e[s_expression_index_index] = index;
+const binary_operator_index = 0;
+const binary_operator_equal = 1;
+const binary_operator_not_equal = 2;
+const binary_operator_less_than = 3;
+const binary_operator_less_than_or_equal_to = 4;
+const binary_operator_greater_than = 5;
+const binary_operator_greater_than_or_equal_to = 6;
+const binary_operator_or = 7;
+const binary_operator_and = 8;
+const binary_operator_xor = 9;
+const binary_operator_add = 10;
+const binary_operator_sub = 11;
+const binary_operator_mul = 12;
+const binary_operator_div = 13;
+const binary_operator_mod = 14;
+const binary_operator_assignment = 15;
 
-    return new_expression(expression_index, e);
+fn new_expression_binary_operation(left, right, op) {
+    e = malloc(s_expression_binary_operation_size);
+    e[s_expression_binary_operation_left] = left;
+    e[s_expression_binary_operation_right] = right;
+    e[s_expression_binary_operation_operator] = op;
+
+    return new_expression(expression_binary_expression, e);
 }
 
-fn expression_index_free(e) {
-    expression_free(e[s_expression_index_base]);
-    expression_free(e[s_expression_index_index]);
+fn expression_binary_expression_free(e) {
+    expression_free(e[s_expression_binary_operation_left]);
+    expression_free(e[s_expression_binary_operation_right]);
     free(e);
 
     return 0;
 }
 
-const expression_literal = 3;
+const expression_unary_expression = 3;
+const s_expression_unary_operation_size = 2;
+const s_expression_unary_operation_operand = 0;
+const s_expression_unary_operation_operator = 1;
+
+const unary_operator_negation = 0;
+const unary_operator_logical_not = 1;
+const unary_operator_bitwise_not = 2;
+
+fn new_expression_unary_operation(operand, op) {
+    e = malloc(s_expression_unary_operation_size);
+    e[s_expression_unary_operation_operand] = operand;
+    e[s_expression_unary_operation_operator] = op;
+
+    return new_expression(expression_unary_expression, e);
+}
+
+fn expression_unary_expression_free(e) {
+    expression_free(e[s_expression_unary_operation_operand]);
+    free(e);
+
+    return 0;
+}
+
+const expression_literal = 4;
 const s_expression_literal_size = 1;
 const s_expression_literal_value = 0;
 
@@ -1005,7 +1049,7 @@ fn expression_literal_free(e) {
     return 0;
 }
 
-const expression_string = 4;
+const expression_string = 5;
 const s_expression_string_size = 1;
 const s_expression_string_string = 0;
 
@@ -1031,422 +1075,19 @@ fn expression_string_free(e) {
     return 0;
 }
 
-const expression_negation = 5;
-const s_expression_negation_size = 1;
-const s_expression_negation_expr = 0;
-
-fn new_expression_negation(expr) {
-    e = malloc(s_expression_negation_size);
-    e[s_expression_negation_expr] = expr;
-
-    return new_expression(expression_negation, e);
-}
-
-fn expression_negation_free(e) {
-    expression_free(e[s_expression_negation_expr]);
-    free(e);
-
-    return 0;
-}
-
-const expression_equal = 6;
-const s_expression_equal_size = 2;
-const s_expression_equal_first = 0;
-const s_expression_equal_second = 1;
-
-fn new_expression_equal(first, second) {
-    e = malloc(s_expression_equal_size);
-    e[s_expression_equal_first] = first;
-    e[s_expression_equal_second] = second;
-
-    return new_expression(expression_equal, e);
-}
-
-fn expression_equal_free(e) {
-    expression_free(e[s_expression_equal_first]);
-    expression_free(e[s_expression_equal_second]);
-    free(e);
-
-    return 0;
-}
-
-const expression_not_equal = 7;
-const s_expression_not_equal_size = 2;
-const s_expression_not_equal_first = 0;
-const s_expression_not_equal_second = 1;
-
-fn new_expression_not_equal(first, second) {
-    e = malloc(s_expression_not_equal_size);
-    e[s_expression_not_equal_first] = first;
-    e[s_expression_not_equal_second] = second;
-
-    return new_expression(expression_not_equal, e);
-}
-
-fn expression_not_equal_free(e) {
-    expression_free(e[s_expression_not_equal_first]);
-    expression_free(e[s_expression_not_equal_second]);
-    free(e);
-
-    return 0;
-}
-
-const expression_less_than = 8;
-const s_expression_less_than_size = 2;
-const s_expression_less_than_first = 0;
-const s_expression_less_than_second = 1;
-
-fn new_expression_less_than(first, second) {
-    e = malloc(s_expression_less_than_size);
-    e[s_expression_less_than_first] = first;
-    e[s_expression_less_than_second] = second;
-
-    return new_expression(expression_less_than, e);
-}
-
-fn expression_less_than_free(e) {
-    expression_free(e[s_expression_less_than_first]);
-    expression_free(e[s_expression_less_than_second]);
-    free(e);
-
-    return 0;
-}
-
-const expression_less_than_or_equal_to = 9;
-const s_expression_less_than_or_equal_to_size = 2;
-const s_expression_less_than_or_equal_to_first = 0;
-const s_expression_less_than_or_equal_to_second = 1;
-
-fn new_expression_less_than_or_equal_to(first, second) {
-    e = malloc(s_expression_less_than_or_equal_to_size);
-    e[s_expression_less_than_or_equal_to_first] = first;
-    e[s_expression_less_than_or_equal_to_second] = second;
-
-    return new_expression(expression_less_than_or_equal_to, e);
-}
-
-fn expression_less_than_or_equal_to_free(e) {
-    expression_free(e[s_expression_less_than_or_equal_to_first]);
-    expression_free(e[s_expression_less_than_or_equal_to_second]);
-    free(e);
-
-    return 0;
-}
-
-const expression_greater_than = 10;
-const s_expression_greater_than_size = 2;
-const s_expression_greater_than_first = 0;
-const s_expression_greater_than_second = 1;
-
-fn new_expression_greater_than(first, second) {
-    e = malloc(s_expression_greater_than_size);
-    e[s_expression_greater_than_first] = first;
-    e[s_expression_greater_than_second] = second;
-
-    return new_expression(expression_greater_than, e);
-}
-
-fn expression_greater_than_free(e) {
-    expression_free(e[s_expression_greater_than_first]);
-    expression_free(e[s_expression_greater_than_second]);
-    free(e);
-
-    return 0;
-}
-
-const expression_greater_than_or_equal_to = 11;
-const s_expression_greater_than_or_equal_to_size = 2;
-const s_expression_greater_than_or_equal_to_first = 0;
-const s_expression_greater_than_or_equal_to_second = 1;
-
-fn new_expression_greater_than_or_equal_to(first, second) {
-    e = malloc(s_expression_greater_than_or_equal_to_size);
-    e[s_expression_greater_than_or_equal_to_first] = first;
-    e[s_expression_greater_than_or_equal_to_second] = second;
-
-    return new_expression(expression_greater_than_or_equal_to, e);
-}
-
-fn expression_greater_than_or_equal_to_free(e) {
-    expression_free(e[s_expression_greater_than_or_equal_to_first]);
-    expression_free(e[s_expression_greater_than_or_equal_to_second]);
-    free(e);
-
-    return 0;
-}
-
-const expression_logical_not = 12;
-const s_expression_logical_not_size = 1;
-const s_expression_logical_not_expr = 0;
-
-fn new_expression_logical_not(expr) {
-    e = malloc(s_expression_logical_not_size);
-    e[s_expression_logical_not_expr] = expr;
-
-    return new_expression(expression_logical_not, e);
-}
-
-fn expression_logical_not_free(e) {
-    expression_free(e[s_expression_logical_not_expr]);
-    free(e);
-
-    return 0;
-}
-
-const expression_bitwise_not = 13;
-const s_expression_bitwise_not_size = 1;
-const s_expression_bitwise_not_expr = 0;
-
-fn new_expression_bitwise_not(expr) {
-    e = malloc(s_expression_bitwise_not_size);
-    e[s_expression_bitwise_not_expr] = expr;
-
-    return new_expression(expression_bitwise_not, e);
-}
-
-fn expression_bitwise_not_free(e) {
-    expression_free(e[s_expression_bitwise_not_expr]);
-    free(e);
-
-    return 0;
-}
-
-const expression_or = 14;
-const s_expression_or_size = 2;
-const s_expression_or_first = 0;
-const s_expression_or_second = 1;
-
-fn new_expression_or(first, second) {
-    e = malloc(s_expression_or_size);
-    e[s_expression_or_first] = first;
-    e[s_expression_or_second] = second;
-
-    return new_expression(expression_or, e);
-}
-
-fn expression_or_free(e) {
-    expression_free(e[s_expression_or_first]);
-    expression_free(e[s_expression_or_second]);
-    free(e);
-
-    return 0;
-}
-
-const expression_and = 15;
-const s_expression_and_size = 2;
-const s_expression_and_first = 0;
-const s_expression_and_second = 1;
-
-fn new_expression_and(first, second) {
-    e = malloc(s_expression_and_size);
-    e[s_expression_and_first] = first;
-    e[s_expression_and_second] = second;
-
-    return new_expression(expression_and, e);
-}
-
-fn expression_and_free(e) {
-    expression_free(e[s_expression_and_first]);
-    expression_free(e[s_expression_and_second]);
-    free(e);
-
-    return 0;
-}
-
-const expression_xor = 16;
-const s_expression_xor_size = 2;
-const s_expression_xor_first = 0;
-const s_expression_xor_second = 1;
-
-fn new_expression_xor(first, second) {
-    e = malloc(s_expression_xor_size);
-    e[s_expression_xor_first] = first;
-    e[s_expression_xor_second] = second;
-
-    return new_expression(expression_xor, e);
-}
-
-fn expression_xor_free(e) {
-    expression_free(e[s_expression_xor_first]);
-    expression_free(e[s_expression_xor_second]);
-    free(e);
-
-    return 0;
-}
-
-const expression_add = 17;
-const s_expression_add_size = 2;
-const s_expression_add_first = 0;
-const s_expression_add_second = 1;
-
-fn new_expression_add(first, second) {
-    e = malloc(s_expression_add_size);
-    e[s_expression_add_first] = first;
-    e[s_expression_add_second] = second;
-
-    return new_expression(expression_add, e);
-}
-
-fn expression_add_free(e) {
-    expression_free(e[s_expression_add_first]);
-    expression_free(e[s_expression_add_second]);
-    free(e);
-
-    return 0;
-}
-
-const expression_sub = 18;
-const s_expression_sub_size = 2;
-const s_expression_sub_first = 0;
-const s_expression_sub_second = 1;
-
-fn new_expression_sub(first, second) {
-    e = malloc(s_expression_sub_size);
-    e[s_expression_sub_first] = first;
-    e[s_expression_sub_second] = second;
-
-    return new_expression(expression_sub, e);
-}
-
-fn expression_sub_free(e) {
-    expression_free(e[s_expression_sub_first]);
-    expression_free(e[s_expression_sub_second]);
-    free(e);
-
-    return 0;
-}
-
-const expression_mul = 19;
-const s_expression_mul_size = 2;
-const s_expression_mul_first = 0;
-const s_expression_mul_second = 1;
-
-fn new_expression_mul(first, second) {
-    e = malloc(s_expression_mul_size);
-    e[s_expression_mul_first] = first;
-    e[s_expression_mul_second] = second;
-
-    return new_expression(expression_mul, e);
-}
-
-fn expression_mul_free(e) {
-    expression_free(e[s_expression_mul_first]);
-    expression_free(e[s_expression_mul_second]);
-    free(e);
-
-    return 0;
-}
-
-const expression_div = 20;
-const s_expression_div_size = 2;
-const s_expression_div_first = 0;
-const s_expression_div_second = 1;
-
-fn new_expression_div(first, second) {
-    e = malloc(s_expression_div_size);
-    e[s_expression_div_first] = first;
-    e[s_expression_div_second] = second;
-
-    return new_expression(expression_div, e);
-}
-
-fn expression_div_free(e) {
-    expression_free(e[s_expression_div_first]);
-    expression_free(e[s_expression_div_second]);
-    free(e);
-
-    return 0;
-}
-
-const expression_mod = 21;
-const s_expression_mod_size = 2;
-const s_expression_mod_first = 0;
-const s_expression_mod_second = 1;
-
-fn new_expression_mod(first, second) {
-    e = malloc(s_expression_mod_size);
-    e[s_expression_mod_first] = first;
-    e[s_expression_mod_second] = second;
-
-    return new_expression(expression_mod, e);
-}
-
-fn expression_mod_free(e) {
-    expression_free(e[s_expression_mod_first]);
-    expression_free(e[s_expression_mod_second]);
-    free(e);
-
-    return 0;
-}
-
-const expression_assignment = 22;
-const s_expression_assignment_size = 2;
-const s_expression_assignment_target = 0;
-const s_expression_assignment_expr = 1;
-
-fn new_expression_assignment(target, expr) {
-    e = malloc(s_expression_assignment_size);
-    e[s_expression_assignment_target] = target;
-    e[s_expression_assignment_expr] = expr;
-
-    return new_expression(expression_assignment, e);
-}
-
-fn expression_assignment_free(e) {
-    expression_free(e[s_expression_assignment_target]);
-    expression_free(e[s_expression_assignment_expr]);
-    free(e);
-
-    return 0;
-}
-
 fn expression_free(e) {
     if((kind = e[s_expression_kind]) == expression_ident) {
         expression_ident_free(e[s_expression_data]);
     } else if(kind == expression_function_call) {
         expression_function_call_free(e[s_expression_data]);
-    } else if(kind == expression_index) {
-        expression_index_free(e[s_expression_data]);
+    } else if(kind == expression_binary_expression) {
+        expression_binary_expression_free(e[s_expression_data]);
+    } else if(kind == expression_unary_expression) {
+        expression_unary_expression_free(e[s_expression_data]);
     } else if(kind == expression_literal) {
         expression_literal_free(e[s_expression_data]);
     } else if(kind == expression_string) {
         expression_string_free(e[s_expression_data]);
-    } else if(kind == expression_negation) {
-        expression_negation_free(e[s_expression_data]);
-    } else if(kind == expression_equal) {
-        expression_equal_free(e[s_expression_data]);
-    } else if(kind == expression_not_equal) {
-        expression_not_equal_free(e[s_expression_data]);
-    } else if(kind == expression_less_than) {
-        expression_less_than_free(e[s_expression_data]);
-    } else if(kind == expression_less_than_or_equal_to) {
-        expression_less_than_or_equal_to_free(e[s_expression_data]);
-    } else if(kind == expression_greater_than) {
-        expression_greater_than_free(e[s_expression_data]);
-    } else if(kind == expression_greater_than_or_equal_to) {
-        expression_greater_than_or_equal_to_free(e[s_expression_data]);
-    } else if(kind == expression_logical_not) {
-        expression_logical_not_free(e[s_expression_data]);
-    } else if(kind == expression_bitwise_not) {
-        expression_bitwise_not_free(e[s_expression_data]);
-    } else if(kind == expression_or) {
-        expression_or_free(e[s_expression_data]);
-    } else if(kind == expression_and) {
-        expression_and_free(e[s_expression_data]);
-    } else if(kind == expression_xor) {
-        expression_xor_free(e[s_expression_data]);
-    } else if(kind == expression_add) {
-        expression_add_free(e[s_expression_data]);
-    } else if(kind == expression_sub) {
-        expression_sub_free(e[s_expression_data]);
-    } else if(kind == expression_mul) {
-        expression_mul_free(e[s_expression_data]);
-    } else if(kind == expression_div) {
-        expression_div_free(e[s_expression_data]);
-    } else if(kind == expression_mod) {
-        expression_mod_free(e[s_expression_data]);
-    } else if(kind == expression_assignment) {
-        expression_assignment_free(e[s_expression_data]);
     };
     free(e);
     return 0;
@@ -2060,62 +1701,13 @@ fn unique_strings_expression(strings, expr) {
             unique_strings_expression(strings, args[s_vec_data][i]);
             i = i + 1;
         };
-    } else if(kind == expression_index) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_index_base]);
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_index_index]);
+    } else if(kind == expression_binary_expression) {
+        unique_strings_expression(strings, expr[s_expression_data][s_expression_binary_operation_left]);
+        unique_strings_expression(strings, expr[s_expression_data][s_expression_binary_operation_right]);
+    } else if(kind == expression_unary_expression) {
+        unique_strings_expression(strings, expr[s_expression_data][s_expression_unary_operation_operand]);
     } else if(kind == expression_string) {
         add_unique_vec(expr[s_expression_data][s_expression_string_string], strings);
-    } else if(kind == expression_negation) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_negation_expr]);
-    } else if(kind == expression_equal) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_equal_first]);
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_equal_second]);
-    } else if(kind == expression_not_equal) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_not_equal_first]);
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_not_equal_second]);
-    } else if(kind == expression_less_than) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_less_than_first]);
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_less_than_second]);
-    } else if(kind == expression_less_than_or_equal_to) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_less_than_or_equal_to_first]);
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_less_than_or_equal_to_second]);
-    } else if(kind == expression_greater_than) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_greater_than_first]);
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_greater_than_second]);
-    } else if(kind == expression_greater_than_or_equal_to) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_greater_than_or_equal_to_first]);
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_greater_than_or_equal_to_second]);
-    } else if(kind == expression_logical_not) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_logical_not_expr]);
-    } else if(kind == expression_bitwise_not) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_bitwise_not_expr]);
-    } else if(kind == expression_or) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_or_first]);
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_or_second]);
-    } else if(kind == expression_and) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_and_first]);
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_and_second]);
-    } else if(kind == expression_xor) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_xor_first]);
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_xor_second]);
-    } else if(kind == expression_add) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_add_first]);
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_add_second]);
-    } else if(kind == expression_sub) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_sub_first]);
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_sub_second]);
-    } else if(kind == expression_mul) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_mul_first]);
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_mul_second]);
-    } else if(kind == expression_div) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_div_first]);
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_div_second]);
-    } else if(kind == expression_mod) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_mod_first]);
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_mod_second]);
-    } else if(kind == expression_assignment) {
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_assignment_target]);
-        unique_strings_expression(strings, expr[s_expression_data][s_expression_assignment_expr]);
     };
 
     return 0;
@@ -2207,62 +1799,13 @@ fn prepass_expression(pr, expr, current_intermediate_count) {
             prepass_expression(pr, args[s_vec_data][i], current_intermediate_count + args[s_vec_count]);
             i = i + 1;
         };
-    } else if(expr_kind == expression_index) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_index_base], current_intermediate_count);
-        prepass_expression(pr, expr[s_expression_data][s_expression_index_index], current_intermediate_count + 1);
+    } else if(expr_kind == expression_binary_expression) {
+        prepass_expression(pr, expr[s_expression_data][s_expression_binary_operation_left], current_intermediate_count);
+        prepass_expression(pr, expr[s_expression_data][s_expression_binary_operation_right], current_intermediate_count + 1);
+    } else if(expr_kind == expression_unary_expression) {
+        prepass_expression(pr, expr[s_expression_data][s_expression_unary_operation_operand], current_intermediate_count);
     } else if(expr_kind == expression_string) {
         add_unique_vec(expr[s_expression_data][s_expression_string_string], pr[s_prepass_result_unique_strings]);
-    } else if(expr_kind == expression_negation) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_negation_expr], current_intermediate_count);
-    } else if(expr_kind == expression_equal) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_equal_first], current_intermediate_count);
-        prepass_expression(pr, expr[s_expression_data][s_expression_equal_second], current_intermediate_count + 1);
-    } else if(expr_kind == expression_not_equal) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_not_equal_first], current_intermediate_count);
-        prepass_expression(pr, expr[s_expression_data][s_expression_not_equal_second], current_intermediate_count + 1);
-    } else if(expr_kind == expression_less_than) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_less_than_first], current_intermediate_count);
-        prepass_expression(pr, expr[s_expression_data][s_expression_less_than_second], current_intermediate_count + 1);
-    } else if(expr_kind == expression_less_than_or_equal_to) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_less_than_or_equal_to_first], current_intermediate_count);
-        prepass_expression(pr, expr[s_expression_data][s_expression_less_than_or_equal_to_second], current_intermediate_count + 1);
-    } else if(expr_kind == expression_greater_than) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_greater_than_first], current_intermediate_count);
-        prepass_expression(pr, expr[s_expression_data][s_expression_greater_than_second], current_intermediate_count + 1);
-    } else if(expr_kind == expression_greater_than_or_equal_to) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_greater_than_or_equal_to_first], current_intermediate_count);
-        prepass_expression(pr, expr[s_expression_data][s_expression_greater_than_or_equal_to_second], current_intermediate_count + 1);
-    } else if(expr_kind == expression_logical_not) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_logical_not_expr], current_intermediate_count);
-    } else if(expr_kind == expression_bitwise_not) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_bitwise_not_expr], current_intermediate_count);
-    } else if(expr_kind == expression_or) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_or_first], current_intermediate_count);
-        prepass_expression(pr, expr[s_expression_data][s_expression_or_second], current_intermediate_count + 1);
-    } else if(expr_kind == expression_and) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_and_first], current_intermediate_count);
-        prepass_expression(pr, expr[s_expression_data][s_expression_and_second], current_intermediate_count + 1);
-    } else if(expr_kind == expression_xor) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_xor_first], current_intermediate_count);
-        prepass_expression(pr, expr[s_expression_data][s_expression_xor_second], current_intermediate_count + 1);
-    } else if(expr_kind == expression_add) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_add_first], current_intermediate_count);
-        prepass_expression(pr, expr[s_expression_data][s_expression_add_second], current_intermediate_count + 1);
-    } else if(expr_kind == expression_sub) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_sub_first], current_intermediate_count);
-        prepass_expression(pr, expr[s_expression_data][s_expression_sub_second], current_intermediate_count + 1);
-    } else if(expr_kind == expression_mul) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_mul_first], current_intermediate_count);
-        prepass_expression(pr, expr[s_expression_data][s_expression_mul_second], current_intermediate_count + 1);
-    } else if(expr_kind == expression_div) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_div_first], current_intermediate_count);
-        prepass_expression(pr, expr[s_expression_data][s_expression_div_second], current_intermediate_count + 1);
-    } else if(expr_kind == expression_mod) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_mod_first], current_intermediate_count);
-        prepass_expression(pr, expr[s_expression_data][s_expression_mod_second], current_intermediate_count + 1);
-    } else if(expr_kind == expression_assignment) {
-        prepass_expression(pr, expr[s_expression_data][s_expression_assignment_target], current_intermediate_count);
-        prepass_expression(pr, expr[s_expression_data][s_expression_assignment_expr], current_intermediate_count + 1);
     };
 
     return 0;
@@ -2446,14 +1989,6 @@ fn codegen_function_get_var(cgf, var) {
 }
 
 fn codegen_function_generate_binary_expression(cgf, first, second, instr) {
-    if(codegen_function_generate_expression(cgf, first) == codegen_fail) {
-        return codegen_fail;
-    };
-    codegen_function_generate_intermediate_save(cgf);
-    if(codegen_function_generate_expression(cgf, second) == codegen_fail) {
-        return codegen_fail;
-    };
-    codegen_function_generate_intermediate_restore(cgf, "rdx");
     write_str(instr);
 
     return 0;
@@ -2477,56 +2012,179 @@ fn parameter_register(i) {
 }
 
 fn codegen_function_generate_expression(cgf, expr) {
-    if((kind = expr[s_expression_kind]) == expression_add) {
-        expr_add = expr[s_expression_data];
-        if(codegen_function_generate_binary_expression(cgf, expr_add[s_expression_add_first], expr_add[s_expression_add_second],
-"    add rax, rdx
-"
-        ) == codegen_fail) {
-            return codegen_fail;
-        };
-    } else if(kind == expression_and) {
-        expr_and = expr[s_expression_data];
-        if(codegen_function_generate_binary_expression(cgf, expr_and[s_expression_and_first], expr_and[s_expression_and_second],
-"    and rax, rdx
-"
-        ) == codegen_fail) {
-            return codegen_fail;
-        };
-    } else if(kind == expression_bitwise_not) {
-        expr_bitwise_not = expr[s_expression_data];
-        if(codegen_function_generate_expression(cgf, expr_bitwise_not[s_expression_bitwise_not_expr]) == codegen_fail) {
-            return codegen_fail;
-        };
-        write_str("    not rax
-"
-        );
-    } else if(kind == expression_div) {
-        expr_div = expr[s_expression_data];
-        if(codegen_function_generate_expression(cgf, expr_div[s_expression_div_first]) == codegen_fail) {
-            return codegen_fail;
-        };
-        codegen_function_generate_intermediate_save(cgf);
-        if(codegen_function_generate_expression(cgf, expr_div[s_expression_div_second]) == codegen_fail) {
-            return codegen_fail;
-        };
-        codegen_function_generate_intermediate_restore(cgf, "rsi");
-        write_str(
-"    xchg rax, rsi
+    if((kind = expr[s_expression_kind]) == expression_binary_expression) {
+        expr_binary = expr[s_expression_data];
+        if((binary_operator = expr_binary[s_expression_binary_operation_operator]) == binary_operator_div) {
+            if(codegen_function_generate_expression(cgf, expr_binary[s_expression_binary_operation_left]) == codegen_fail) {
+                return codegen_fail;
+            };
+            codegen_function_generate_intermediate_save(cgf);
+            if(codegen_function_generate_expression(cgf, expr_binary[s_expression_binary_operation_right]) == codegen_fail) {
+                return codegen_fail;
+            };
+            codegen_function_generate_intermediate_restore(cgf, "rsi");
+            write_str("    xchg rax, rsi
     cqo
     idiv rsi
 "
-        );
-    } else if(kind == expression_equal) {
-        expr_equal = expr[s_expression_data];
-        if(codegen_function_generate_binary_expression(cgf, expr_equal[s_expression_equal_first], expr_equal[s_expression_equal_second],
-"    mov rsi, rax
+            );
+        } else if(binary_operator == binary_operator_mod) {
+            if(codegen_function_generate_expression(cgf, expr_binary[s_expression_binary_operation_left]) == codegen_fail) {
+                return codegen_fail;
+            };
+            codegen_function_generate_intermediate_save(cgf);
+            if(codegen_function_generate_expression(cgf, expr_binary[s_expression_binary_operation_right]) == codegen_fail) {
+                return codegen_fail;
+            };
+            codegen_function_generate_intermediate_restore(cgf, "rsi");
+            write_str("    xchg rax, rsi
+    cqo
+    idiv rsi
+    mov rax, rdx
+"
+            );
+        } else if(binary_operator == binary_operator_assignment) {
+            target = expr_binary[s_expression_binary_operation_left];
+
+            if((target_kind = target[s_expression_kind]) == expression_ident) {
+                if(codegen_function_generate_expression(cgf, expr_binary[s_expression_binary_operation_right]) == codegen_fail) {
+                    return codegen_fail;
+                };
+                slot = codegen_function_get_var(cgf, target[s_expression_data][s_expression_ident_ident]);
+                write_str("    mov [rbp-");
+                write_str(i_to_s((slot+1) * 8));
+                write_str("], rax
+"
+                );
+            } else if(target_kind == expression_binary_expression) {
+                index = target[s_expression_data];
+                if(index[s_expression_binary_operation_operator] == binary_operator_index) {
+                    if(codegen_function_generate_expression(cgf, index[s_expression_binary_operation_left]) == codegen_fail) {
+                        return codegen_fail;
+                    };
+                    codegen_function_generate_intermediate_save(cgf);
+                    if(codegen_function_generate_expression(cgf, index[s_expression_binary_operation_right]) == codegen_fail) {
+                        return codegen_fail;
+                    };
+                    codegen_function_generate_intermediate_save(cgf);
+                    if(codegen_function_generate_expression(cgf, expr_binary[s_expression_binary_operation_right]) == codegen_fail) {
+                        return codegen_fail;
+                    };
+                    codegen_function_generate_intermediate_restore(cgf, "rsi");
+                    codegen_function_generate_intermediate_restore(cgf, "rdx");
+                    write_str("    mov [rdx + rsi * 8], rax
+"
+                    );
+                } else {
+                    write_str("Invalid assignment target; only index or variable are valid\n");
+                    return codegen_fail;
+                };
+            } else {
+                write_str("Invalid assignment target; only index or variable are valid\n");
+                return codegen_fail;
+            };
+        } else {
+            if(codegen_function_generate_expression(cgf, expr_binary[s_expression_binary_operation_left]) == codegen_fail) {
+                return codegen_fail;
+            };
+            codegen_function_generate_intermediate_save(cgf);
+            if(codegen_function_generate_expression(cgf, expr_binary[s_expression_binary_operation_right]) == codegen_fail) {
+                return codegen_fail;
+            };
+            codegen_function_generate_intermediate_restore(cgf, "rdx");
+            if((binary_operator = expr_binary[s_expression_binary_operation_operator]) == binary_operator_add) {
+                write_str("    add rax, rdx
+"
+                );
+            } else if(binary_operator == binary_operator_and) {
+                write_str("    and rax, rdx
+"
+                );
+            } else if(binary_operator == binary_operator_equal) {
+                write_str("    mov rsi, rax
     xor eax, eax
     cmp rsi, rdx
     sete al
 "
-        ) == codegen_fail) {
+                );
+            } else if(binary_operator == binary_operator_index) {
+                write_str("    mov rax, [rdx + rax * 8]
+"
+                );
+            } else if(binary_operator == binary_operator_not_equal) {
+                write_str("    mov rsi, rax
+    xor eax, eax
+    cmp rsi, rdx
+    setne al
+"
+                );
+            } else if(binary_operator == binary_operator_less_than) {
+                write_str("    mov rsi, rax
+    xor eax, eax
+    cmp rsi, rdx
+    setg al
+"
+                );
+            } else if(binary_operator == binary_operator_less_than_or_equal_to) {
+                write_str("    mov rsi, rax
+    xor eax, eax
+    cmp rsi, rdx
+    setge al
+"
+                );
+            } else if(binary_operator == binary_operator_greater_than) {
+                write_str("    mov rsi, rax
+    xor eax, eax
+    cmp rsi, rdx
+    setl al
+"
+                );
+            } else if(binary_operator == binary_operator_greater_than_or_equal_to) {
+                write_str("    mov rsi, rax
+    xor eax, eax
+    cmp rsi, rdx
+    setle al
+"
+                );
+            } else if(binary_operator == binary_operator_or) {
+                write_str("    or rax, rdx
+"
+                );
+            } else if(binary_operator == binary_operator_xor) {
+                write_str("    xor rax, rdx
+"
+                );
+            } else if(binary_operator == binary_operator_sub) {
+                write_str("    xchg rax, rdx
+    sub rax, rdx
+"
+                );
+            } else if(binary_operator == binary_operator_mul) {
+                write_str("    imul rdx
+"
+                );
+            };
+        };
+    } else if(kind == expression_unary_expression) {
+        expr_unary = expr[s_expression_data];
+        if(codegen_function_generate_expression(cgf, expr_unary[s_expression_unary_operation_operand]) == codegen_fail) {
             return codegen_fail;
+        };
+        if((unary_operator = expr_unary[s_expression_unary_operation_operator]) == unary_operator_bitwise_not) {
+            write_str("    not rax
+"
+        );
+        } else if(unary_operator == unary_operator_negation) {
+            write_str("    neg rax
+"
+            );
+        } else if(unary_operator == unary_operator_logical_not) {
+            write_str("    mov rsi, rax
+    xor eax, eax
+    test rsi, rsi
+    sete al
+"
+            );
         };
     } else if(kind == expression_function_call) {
         expr_function_call = expr[s_expression_data];
@@ -2555,14 +2213,6 @@ fn codegen_function_generate_expression(cgf, expr) {
         write_str("    call intlang_");
         write_str_vec(expr_function_call[s_expression_function_call_function_name]);
         write_c('\n');
-    } else if(kind == expression_index) {
-        expr_index = expr[s_expression_data];
-        if(codegen_function_generate_binary_expression(cgf, expr_index[s_expression_index_base], expr_index[s_expression_index_index],
-"    mov rax, [rdx + rax * 8]
-"
-        ) == codegen_fail) {
-            return codegen_fail;
-        };
     } else if(kind == expression_ident) {
         expr_ident = expr[s_expression_data];
         if((c = constants_get_constant_value(cgf[s_codegen_function_parent][s_codegen_constants], expr_ident[s_expression_ident_ident]))) {
@@ -2595,168 +2245,6 @@ fn codegen_function_generate_expression(cgf, expr) {
         write_str("    mov rax, intlangstring_");
         write_str(i_to_s(string));
         write_c('\n');
-    } else if(kind == expression_negation) {
-        expr_negation = expr[s_expression_data];
-        if(codegen_function_generate_expression(cgf, expr_negation[s_expression_negation_expr]) == codegen_fail) {
-            return codegen_fail;
-        };
-        write_str("    neg rax
-"
-        );
-    } else if(kind == expression_not_equal) {
-        expr_not_equal = expr[s_expression_data];
-        if(codegen_function_generate_binary_expression(cgf, expr_not_equal[s_expression_not_equal_first], expr_not_equal[s_expression_not_equal_second],
-"    mov rsi, rax
-    xor eax, eax
-    cmp rsi, rdx
-    setne al
-"
-        ) == codegen_fail) {
-            return codegen_fail;
-        };
-    } else if(kind == expression_less_than) {
-        expr_less_than = expr[s_expression_data];
-        if(codegen_function_generate_binary_expression(cgf, expr_less_than[s_expression_less_than_first], expr_less_than[s_expression_less_than_second],
-"    mov rsi, rax
-    xor eax, eax
-    cmp rsi, rdx
-    setg al
-"
-        ) == codegen_fail) {
-            return codegen_fail;
-        };
-    } else if(kind == expression_less_than_or_equal_to) {
-        expr_less_than_or_equal_to = expr[s_expression_data];
-        if(codegen_function_generate_binary_expression(cgf, expr_less_than_or_equal_to[s_expression_less_than_or_equal_to_first], expr_less_than_or_equal_to[s_expression_less_than_or_equal_to_second],
-"    mov rsi, rax
-    xor eax, eax
-    cmp rsi, rdx
-    setge al
-"
-        ) == codegen_fail) {
-            return codegen_fail;
-        };
-    } else if(kind == expression_greater_than) {
-        expr_greater_than = expr[s_expression_data];
-        if(codegen_function_generate_binary_expression(cgf, expr_greater_than[s_expression_greater_than_first], expr_greater_than[s_expression_greater_than_second],
-"    mov rsi, rax
-    xor eax, eax
-    cmp rsi, rdx
-    setl al
-"
-        ) == codegen_fail) {
-            return codegen_fail;
-        };
-    } else if(kind == expression_greater_than_or_equal_to) {
-        expr_greater_than_or_equal_to = expr[s_expression_data];
-        if(codegen_function_generate_binary_expression(cgf, expr_greater_than_or_equal_to[s_expression_greater_than_or_equal_to_first], expr_greater_than_or_equal_to[s_expression_greater_than_or_equal_to_second],
-"    mov rsi, rax
-    xor eax, eax
-    cmp rsi, rdx
-    setle al
-"
-        ) == codegen_fail) {
-            return codegen_fail;
-        };
-    } else if(kind == expression_logical_not) {
-        expr_logical_not = expr[s_expression_data];
-        if(codegen_function_generate_expression(cgf, expr_logical_not[s_expression_logical_not_expr]) == codegen_fail) {
-            return codegen_fail;
-        };
-
-        write_str(
-"    mov rsi, rax
-    xor eax, eax
-    test rsi, rsi
-    sete al
-"
-        );
-    } else if(kind == expression_or) {
-        expr_or = expr[s_expression_data];
-        if(codegen_function_generate_binary_expression(cgf, expr_or[s_expression_or_first], expr_or[s_expression_or_second],
-"    or rax, rdx
-"
-        ) == codegen_fail) {
-            return codegen_fail;
-        };
-    } else if(kind == expression_xor) {
-        expr_xor = expr[s_expression_data];
-        if(codegen_function_generate_binary_expression(cgf, expr_xor[s_expression_xor_first], expr_xor[s_expression_xor_second],
-"    xor rax, rdx
-"
-        ) == codegen_fail) {
-            return codegen_fail;
-        };
-    } else if(kind == expression_sub) {
-        expr_sub = expr[s_expression_data];
-        if(codegen_function_generate_binary_expression(cgf, expr_sub[s_expression_sub_first], expr_sub[s_expression_sub_second],
-"    xchg rax, rdx
-    sub rax, rdx
-"
-        ) == codegen_fail) {
-            return codegen_fail;
-        };
-    } else if(kind == expression_mul) {
-        expr_mul = expr[s_expression_data];
-        if(codegen_function_generate_binary_expression(cgf, expr_mul[s_expression_mul_first], expr_mul[s_expression_mul_second],
-"    imul rdx
-"
-        ) == codegen_fail) {
-            return codegen_fail;
-        };
-    } else if(kind == expression_mod) {
-        expr_mod = expr[s_expression_data];
-        if(codegen_function_generate_expression(cgf, expr_mod[s_expression_mod_first]) == codegen_fail) {
-            return codegen_fail;
-        };
-        codegen_function_generate_intermediate_save(cgf);
-        if(codegen_function_generate_expression(cgf, expr_mod[s_expression_mod_second]) == codegen_fail) {
-            return codegen_fail;
-        };
-        codegen_function_generate_intermediate_restore(cgf, "rsi");
-        write_str(
-"    xchg rax, rsi
-    cqo
-    idiv rsi
-    mov rax, rdx
-"
-        );
-    } else if(kind == expression_assignment) {
-        expr_assignment = expr[s_expression_data];
-        target = expr_assignment[s_expression_assignment_target];
-
-        if((target_kind = target[s_expression_kind]) == expression_ident) {
-            if(codegen_function_generate_expression(cgf, expr_assignment[s_expression_assignment_expr]) == codegen_fail) {
-                return codegen_fail;
-            };
-            slot = codegen_function_get_var(cgf, target[s_expression_data][s_expression_ident_ident]);
-            write_str("    mov [rbp-");
-            write_str(i_to_s((slot+1) * 8));
-            write_str("], rax
-"
-            );
-        } else if(target_kind == expression_index) {
-            index_target = target[s_expression_data];
-            if(codegen_function_generate_expression(cgf, index_target[s_expression_index_base]) == codegen_fail) {
-                return codegen_fail;
-            };
-            codegen_function_generate_intermediate_save(cgf);
-            if(codegen_function_generate_expression(cgf, index_target[s_expression_index_index]) == codegen_fail) {
-                return codegen_fail;
-            };
-            codegen_function_generate_intermediate_save(cgf);
-            if(codegen_function_generate_expression(cgf, expr_assignment[s_expression_assignment_expr]) == codegen_fail) {
-                return codegen_fail;
-            };
-            codegen_function_generate_intermediate_restore(cgf, "rsi");
-            codegen_function_generate_intermediate_restore(cgf, "rdx");
-            write_str("    mov [rdx + rsi * 8], rax
-"
-            );
-        } else {
-            write_str("Invalid assignment target; only index or variable are valid\n");
-            return codegen_fail;
-        };
     };
 
     return 0;
@@ -3295,8 +2783,6 @@ fn main() {
     while((l = scanner_next_lexeme(s))[s_lexeme_token] != token_eof & l[s_lexeme_token] != token_err) {
         vec_push(lexemes, l);
     };
-    // free last eof or err lexeme
-    free(l);
 
     if(l[s_lexeme_token] == token_err) {
         i = 0;
@@ -3306,9 +2792,12 @@ fn main() {
         };
         vec_free(lexemes);
         scanner_free(s);
+        free(l);
         write_str("Failed to lex!\n");
         return 1;
     };
+
+    free(l);
 
     scanner_free(s);
 

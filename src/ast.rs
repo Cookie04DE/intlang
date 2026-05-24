@@ -52,29 +52,46 @@ impl<'src> From<lexer::StringComponent<'src>> for StringComponent<'src> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOp {
+    Negation,
+    LogicalNot,
+    BitwiseNot,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryOp {
+    Index,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessThanOrEqualTo,
+    GreaterThan,
+    GreaterThanOrEqualTo,
+    Or,
+    And,
+    Xor,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Assignment,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expression<'src> {
     Ident(&'src str),
     FunctionCall(&'src str, Vec<Expression<'src>>),
-    Index(Box<Expression<'src>>, Box<Expression<'src>>),
     Literal(i64),
     String(Vec<StringComponent<'src>>),
-    Negation(Box<Expression<'src>>),
-    Equal(Box<Expression<'src>>, Box<Expression<'src>>),
-    NotEqual(Box<Expression<'src>>, Box<Expression<'src>>),
-    LessThan(Box<Expression<'src>>, Box<Expression<'src>>),
-    LessThanOrEqualTo(Box<Expression<'src>>, Box<Expression<'src>>),
-    GreaterThan(Box<Expression<'src>>, Box<Expression<'src>>),
-    GreaterThanOrEqualTo(Box<Expression<'src>>, Box<Expression<'src>>),
-    LogicalNot(Box<Expression<'src>>),
-    BitwiseNot(Box<Expression<'src>>),
-    Or(Box<Expression<'src>>, Box<Expression<'src>>),
-    And(Box<Expression<'src>>, Box<Expression<'src>>),
-    Xor(Box<Expression<'src>>, Box<Expression<'src>>),
-    Add(Box<Expression<'src>>, Box<Expression<'src>>),
-    Sub(Box<Expression<'src>>, Box<Expression<'src>>),
-    Mul(Box<Expression<'src>>, Box<Expression<'src>>),
-    Div(Box<Expression<'src>>, Box<Expression<'src>>),
-    Mod(Box<Expression<'src>>, Box<Expression<'src>>),
-    Assignment(Box<Expression<'src>>, Box<Expression<'src>>),
+    UnaryOperation {
+        operand: Box<Expression<'src>>,
+        op: UnaryOp,
+    },
+    BinaryOperation {
+        left: Box<Expression<'src>>,
+        right: Box<Expression<'src>>,
+        op: BinaryOp,
+    },
 }

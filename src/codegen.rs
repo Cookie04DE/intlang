@@ -11,7 +11,9 @@ use either::Either::{Left, Right};
 use itertools::Itertools;
 use tempfile::TempDir;
 
-use crate::ast::{ConstantValue, Expression, Function, SourceFile, Statement, StringComponent};
+use crate::ast::{
+    BinaryOp, ConstantValue, Expression, Function, SourceFile, Statement, StringComponent, UnaryOp,
+};
 
 const BUILTIN_DATA: &str = r#"
 default rel
@@ -401,21 +403,37 @@ impl CodeGen {
             expr: &Expression<'src>,
         ) -> (usize, HashSet<&'src str>) {
             match expr {
-                Expression::Add(left, right)
-                | Expression::Div(left, right)
-                | Expression::And(left, right)
-                | Expression::Equal(left, right)
-                | Expression::GreaterThan(left, right)
-                | Expression::GreaterThanOrEqualTo(left, right)
-                | Expression::LessThan(left, right)
-                | Expression::LessThanOrEqualTo(left, right)
-                | Expression::Mod(left, right)
-                | Expression::Mul(left, right)
-                | Expression::NotEqual(left, right)
-                | Expression::Or(left, right)
-                | Expression::Sub(left, right)
-                | Expression::Xor(left, right)
-                | Expression::Index(left, right) => {
+                Expression::BinaryOperation {
+                    left,
+                    right,
+                    op: BinaryOp::Assignment,
+                } => match &**left {
+                    Expression::Ident(var) => {
+                        let (expr_inter, mut expr_vars) = expr_max(code_gen, right);
+
+                        expr_vars.insert(var);
+
+                        (expr_inter, expr_vars)
+                    }
+                    Expression::BinaryOperation {
+                        left: base,
+                        right: offset,
+                        op: BinaryOp::Index,
+                    } => {
+                        let (base_inter, mut base_vars) = expr_max(code_gen, base);
+                        let (offset_inter, offset_vars) = expr_max(code_gen, offset);
+                        let (right_inter, right_vars) = expr_max(code_gen, right);
+
+                        base_vars.extend(offset_vars);
+                        base_vars.extend(right_vars);
+
+                        (base_inter.max(offset_inter).max(right_inter) + 2, base_vars)
+                    }
+                    _ => panic!(
+                        "Unsupported expression for assignment: {left:?}; only index or variable are supported"
+                    ),
+                },
+                Expression::BinaryOperation { left, right, .. } => {
                     let (left_inter, left_vars) = expr_max(code_gen, left);
                     let (right_inter, right_vars) = expr_max(code_gen, right);
 
@@ -445,31 +463,7 @@ impl CodeGen {
                     );
                     (inter + args.len(), vars)
                 }
-                Expression::Negation(expr)
-                | Expression::LogicalNot(expr)
-                | Expression::BitwiseNot(expr) => expr_max(code_gen, expr),
-                Expression::Assignment(left, right) => match &**left {
-                    Expression::Ident(var) => {
-                        let (expr_inter, mut expr_vars) = expr_max(code_gen, right);
-
-                        expr_vars.insert(var);
-
-                        (expr_inter, expr_vars)
-                    }
-                    Expression::Index(base, offset) => {
-                        let (base_inter, mut base_vars) = expr_max(code_gen, base);
-                        let (offset_inter, offset_vars) = expr_max(code_gen, offset);
-                        let (right_inter, right_vars) = expr_max(code_gen, right);
-
-                        base_vars.extend(offset_vars);
-                        base_vars.extend(right_vars);
-
-                        (base_inter.max(offset_inter).max(right_inter) + 2, base_vars)
-                    }
-                    _ => panic!(
-                        "Unsupported expression for assignment: {left:?}; only index or variable are supported"
-                    ),
-                },
+                Expression::UnaryOperation { operand, .. } => expr_max(code_gen, operand),
             }
         }
 
@@ -748,47 +742,31 @@ intlang_{name}:
 
     #[allow(clippy::too_many_lines)]
     fn generate_expression(&mut self, expr: &Expression) {
-        fn gen_double(
-            cgf: &mut CodeGenFunction,
-            first: &Expression<'_>,
-            second: &Expression<'_>,
-            instr: &str,
-        ) {
-            cgf.generate_expression(first);
-            cgf.generate_intermediate_save();
-            cgf.intermediate_counter += 1;
-            cgf.generate_expression(second);
-            cgf.intermediate_counter -= 1;
-            cgf.generate_intermediate_restore();
-            cgf.content.push_str(instr);
-        }
         match expr {
-            Expression::Add(first, second) => gen_double(
-                self,
-                first,
-                second,
-                r"
-    add rax, rdx
-",
-            ),
-            Expression::And(first, second) => gen_double(
-                self,
-                first,
-                second,
-                r"
-    and rax, rdx
-",
-            ),
-
-            Expression::BitwiseNot(expr) => {
-                self.generate_expression(expr);
-                self.content.push_str(
+            Expression::BinaryOperation {
+                left,
+                right,
+                op: BinaryOp::Index,
+            } => {
+                self.generate_expression(left);
+                self.generate_intermediate_save();
+                self.intermediate_counter += 1;
+                self.generate_expression(right);
+                self.intermediate_counter -= 1;
+                let offset = self.get_intermediate_offset();
+                let _ = write!(
+                    self.content,
                     r"
-    not rax
+    mov rsi, [rbp-{offset}]
+    mov rax, [rsi + rax * 8]
 ",
                 );
             }
-            Expression::Div(dividend, divisor) => {
+            Expression::BinaryOperation {
+                left: dividend,
+                right: divisor,
+                op: BinaryOp::Div,
+            } => {
                 self.generate_expression(dividend);
                 self.generate_intermediate_save();
                 self.intermediate_counter += 1;
@@ -805,18 +783,195 @@ intlang_{name}:
 ",
                 );
             }
-
-            Expression::Equal(first, second) => gen_double(
-                self,
-                first,
-                second,
-                r"
+            Expression::BinaryOperation {
+                left: dividend,
+                right: divisor,
+                op: BinaryOp::Mod,
+            } => {
+                self.generate_expression(dividend);
+                self.generate_intermediate_save();
+                self.intermediate_counter += 1;
+                self.generate_expression(divisor);
+                self.intermediate_counter -= 1;
+                let offset = self.get_intermediate_offset();
+                let _ = write!(
+                    self.content,
+                    r"
+    mov rsi, [rbp-{offset}]
+    xchg rax, rsi
+    cqo
+    idiv rsi
+    mov rax, rdx
+",
+                );
+            }
+            Expression::BinaryOperation {
+                left,
+                right,
+                op: BinaryOp::Assignment,
+            } => match &**left {
+                Expression::Ident(name) => {
+                    self.generate_expression(right);
+                    let offset = self.get_var_offset(name);
+                    let _ = write!(
+                        self.content,
+                        r"
+    mov [rbp-{offset}], rax
+"
+                    );
+                }
+                Expression::BinaryOperation {
+                    left: base,
+                    right: offset,
+                    op: BinaryOp::Index,
+                } => {
+                    self.generate_expression(base);
+                    self.generate_intermediate_save();
+                    let base_offset = self.get_intermediate_offset();
+                    self.intermediate_counter += 1;
+                    self.generate_expression(offset);
+                    self.generate_intermediate_save();
+                    let offset_offset = self.get_intermediate_offset();
+                    self.intermediate_counter += 1;
+                    self.generate_expression(right);
+                    self.intermediate_counter -= 2;
+                    let _ = write!(
+                        self.content,
+                        r"
+    mov rdx, [rbp-{base_offset}]
+    mov rsi, [rbp-{offset_offset}]
+    mov [rdx + rsi * 8], rax
+",
+                    );
+                }
+                _ => panic!(
+                    "Unsupported expression for assignment: {left:?}; only index or variable are supported"
+                ),
+            },
+            Expression::BinaryOperation { left, right, op } => {
+                self.generate_expression(left);
+                self.generate_intermediate_save();
+                self.intermediate_counter += 1;
+                self.generate_expression(right);
+                self.intermediate_counter -= 1;
+                self.generate_intermediate_restore();
+                self.content.push_str(match op {
+                    BinaryOp::Add => {
+                        r"
+    add rax, rdx
+"
+                    }
+                    BinaryOp::And => {
+                        r"
+    and rax, rdx
+"
+                    }
+                    BinaryOp::Equal => {
+                        r"
     mov rsi, rax
     xor eax, eax
     cmp rsi, rdx
     sete al
-",
-            ),
+"
+                    }
+                    BinaryOp::NotEqual => {
+                        r"
+    mov rsi, rax
+    xor eax, eax
+    cmp rsi, rdx
+    setne al
+"
+                    }
+                    BinaryOp::LessThan => {
+                        r"
+    xchg rax, rdx
+    mov rsi, rax
+    xor eax, eax
+    cmp rsi, rdx
+    setl al
+"
+                    }
+                    BinaryOp::LessThanOrEqualTo => {
+                        r"
+    xchg rax, rdx
+    mov rsi, rax
+    xor eax, eax
+    cmp rsi, rdx
+    setle al
+"
+                    }
+
+                    BinaryOp::GreaterThan => {
+                        r"
+    xchg rax, rdx
+    mov rsi, rax
+    xor eax, eax
+    cmp rsi, rdx
+    setg al
+"
+                    }
+
+                    BinaryOp::GreaterThanOrEqualTo => {
+                        r"
+    xchg rax, rdx
+    mov rsi, rax
+    xor eax, eax
+    cmp rsi, rdx
+    setge al
+"
+                    }
+                    BinaryOp::Or => {
+                        r"
+    or rax, rdx
+"
+                    }
+
+                    BinaryOp::Xor => {
+                        r"
+    xor rax, rdx
+"
+                    }
+
+                    BinaryOp::Sub => {
+                        r"
+    xchg rax, rdx
+    sub rax, rdx
+"
+                    }
+
+                    BinaryOp::Mul => {
+                        r"
+    imul rdx
+"
+                    }
+                    BinaryOp::Index | BinaryOp::Div | BinaryOp::Mod | BinaryOp::Assignment => {
+                        unreachable!("handled by previous specialized case")
+                    }
+                });
+            }
+            Expression::UnaryOperation { operand, op } => {
+                self.generate_expression(operand);
+                self.content.push_str(match op {
+                    UnaryOp::BitwiseNot => {
+                        r"
+    not rax
+"
+                    }
+                    UnaryOp::Negation => {
+                        r"
+    neg rax
+"
+                    }
+                    UnaryOp::LogicalNot => {
+                        r"
+    mov rsi, rax
+    xor eax, eax
+    test rsi, rsi
+    sete al
+"
+                    }
+                });
+            }
 
             Expression::FunctionCall(name, arguments) => {
                 assert!(
@@ -854,21 +1009,6 @@ intlang_{name}:
 
                 self.intermediate_counter = inner_base;
             }
-            Expression::Index(left, right) => {
-                self.generate_expression(left);
-                self.generate_intermediate_save();
-                self.intermediate_counter += 1;
-                self.generate_expression(right);
-                self.intermediate_counter -= 1;
-                let offset = self.get_intermediate_offset();
-                let _ = write!(
-                    self.content,
-                    r"
-    mov rsi, [rbp-{offset}]
-    mov rax, [rsi + rax * 8]
-",
-                );
-            }
             Expression::Ident(name) => {
                 if let Some(value) = self.parent.constants.get(*name) {
                     let value = value.clone();
@@ -905,179 +1045,6 @@ intlang_{name}:
                     ",
                 );
             }
-            Expression::Negation(expr) => {
-                self.generate_expression(expr);
-                self.content.push_str(
-                    r"
-    neg rax
-",
-                );
-            }
-            Expression::NotEqual(first, second) => gen_double(
-                self,
-                first,
-                second,
-                r"
-    mov rsi, rax
-    xor eax, eax
-    cmp rsi, rdx
-    setne al
-",
-            ),
-
-            Expression::LessThan(first, second) => gen_double(
-                self,
-                first,
-                second,
-                r"
-    xchg rax, rdx
-    mov rsi, rax
-    xor eax, eax
-    cmp rsi, rdx
-    setl al
-",
-            ),
-
-            Expression::LessThanOrEqualTo(first, second) => gen_double(
-                self,
-                first,
-                second,
-                r"
-    xchg rax, rdx
-    mov rsi, rax
-    xor eax, eax
-    cmp rsi, rdx
-    setle al
-",
-            ),
-
-            Expression::GreaterThan(first, second) => gen_double(
-                self,
-                first,
-                second,
-                r"
-    xchg rax, rdx
-    mov rsi, rax
-    xor eax, eax
-    cmp rsi, rdx
-    setg al
-",
-            ),
-
-            Expression::GreaterThanOrEqualTo(first, second) => gen_double(
-                self,
-                first,
-                second,
-                r"
-    xchg rax, rdx
-    mov rsi, rax
-    xor eax, eax
-    cmp rsi, rdx
-    setge al
-",
-            ),
-
-            Expression::LogicalNot(expr) => {
-                self.generate_expression(expr);
-                self.content.push_str(
-                    r"
-    mov rsi, rax
-    xor eax, eax
-    test rsi, rsi
-    sete al
-",
-                );
-            }
-            Expression::Or(first, second) => gen_double(
-                self,
-                first,
-                second,
-                r"
-    or rax, rdx
-",
-            ),
-
-            Expression::Xor(first, second) => gen_double(
-                self,
-                first,
-                second,
-                r"
-    xor rax, rdx
-",
-            ),
-
-            Expression::Sub(first, second) => gen_double(
-                self,
-                first,
-                second,
-                r"
-    xchg rax, rdx
-    sub rax, rdx
-",
-            ),
-
-            Expression::Mul(first, second) => gen_double(
-                self,
-                first,
-                second,
-                r"
-    imul rdx
-",
-            ),
-
-            Expression::Mod(first, second) => {
-                self.generate_expression(first);
-                self.generate_intermediate_save();
-                self.intermediate_counter += 1;
-                self.generate_expression(second);
-                self.intermediate_counter -= 1;
-                let offset = self.get_intermediate_offset();
-                let _ = write!(
-                    self.content,
-                    r"
-    mov rsi, [rbp-{offset}]
-    xchg rax, rsi
-    cqo
-    idiv rsi
-    mov rax, rdx
-",
-                );
-            }
-            Expression::Assignment(left, right) => match &**left {
-                Expression::Ident(name) => {
-                    self.generate_expression(right);
-                    let offset = self.get_var_offset(name);
-                    let _ = write!(
-                        self.content,
-                        r"
-    mov [rbp-{offset}], rax
-"
-                    );
-                }
-                Expression::Index(base, offset) => {
-                    self.generate_expression(base);
-                    self.generate_intermediate_save();
-                    let base_offset = self.get_intermediate_offset();
-                    self.intermediate_counter += 1;
-                    self.generate_expression(offset);
-                    self.generate_intermediate_save();
-                    let offset_offset = self.get_intermediate_offset();
-                    self.intermediate_counter += 1;
-                    self.generate_expression(right);
-                    self.intermediate_counter -= 2;
-                    let _ = write!(
-                        self.content,
-                        r"
-    mov rdx, [rbp-{base_offset}]
-    mov rsi, [rbp-{offset_offset}]
-    mov [rdx + rsi * 8], rax
-",
-                    );
-                }
-                _ => panic!(
-                    "Unsupported expression for assignment: {left:?}; only index or variable are supported"
-                ),
-            },
         }
     }
 }
