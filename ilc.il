@@ -59,18 +59,21 @@ fn vec_clone(v) {
 }
 
 const s_scanner_size = 2;
-const s_scanner_backtrack_vec = 0;
-const s_scanner_backtrack_pos = 1;
+const s_scanner_peek = 0;
+const s_scanner_word_vec = 1; // holds identifiers or possibly keywords
+
+// since eof already is -1
+const peek_no_char = -2;
 
 fn new_scanner() {
     s = malloc(s_scanner_size);
-    s[s_scanner_backtrack_vec] = new_vec();
-    s[s_scanner_backtrack_pos] = 0;
+    s[s_scanner_word_vec] = new_vec();
+    s[s_scanner_peek] = peek_no_char;
     return s;
 }
 
 fn scanner_free(s) {
-    vec_free(s[s_scanner_backtrack_vec]);
+    vec_free(s[s_scanner_word_vec]);
     free(s);
 
     return 0;
@@ -79,20 +82,21 @@ fn scanner_free(s) {
 const eof = -1;
 
 fn scanner_peek(s) {
-    if(s[s_scanner_backtrack_pos] < s[s_scanner_backtrack_vec][s_vec_count]) {
-        c = s[s_scanner_backtrack_vec][s_vec_data][s[s_scanner_backtrack_pos]];
-        return c;
+    if((peek = s[s_scanner_peek]) != peek_no_char) {
+        return peek;
     };
     c = read_c();
-    vec_push(s[s_scanner_backtrack_vec], c);
+    s[s_scanner_peek] = c;
     return c;
 }
 
 fn scanner_next(s) {
-    // the same as peeking and advancing
-    c = scanner_peek(s);
-    s[s_scanner_backtrack_pos] = s[s_scanner_backtrack_pos] + 1;
-    return c;
+    if((peek = s[s_scanner_peek]) != peek_no_char) {
+        s[s_scanner_peek] = peek_no_char;
+        return peek;
+    };
+
+    return read_c();
 }
 
 fn char_is_white(c) {
@@ -108,34 +112,19 @@ fn scanner_skip_white(s) {
 }
 
 fn scanner_is_keyword(s, keyword_str) {
-    old_pos = s[s_scanner_backtrack_pos];
-    i = 0;
-    while(i < keyword_str[0]) {
-        if(scanner_next(s) != keyword_str[i+1]) {
-            s[s_scanner_backtrack_pos] = old_pos;
-            return 0;
-        };
-        i = i + 1;
-    };
-
-    if(char_is_ident_continue(scanner_peek(s))) {
-        s[s_scanner_backtrack_pos] = old_pos;
+    if(s[s_scanner_word_vec][s_vec_count] != keyword_str[0]) {
         return 0;
     };
 
-    return 1;
-}
-
-fn scanner_is_str(s, str) {
-    old_pos = s[s_scanner_backtrack_pos];
     i = 0;
-    while(i < str[0]) {
-        if(scanner_next(s) != str[i+1]) {
-            s[s_scanner_backtrack_pos] = old_pos;
+    while(i < keyword_str[0] & i < s[s_scanner_word_vec][s_vec_count]) {
+        if(s[s_scanner_word_vec][s_vec_data][i] != keyword_str[i+1]) {
             return 0;
         };
         i = i + 1;
     };
+
+    s[s_scanner_word_vec][s_vec_count] = 0;
 
     return 1;
 }
@@ -276,80 +265,99 @@ fn scanner_next_escaped_char(s) {
 fn scanner_next_lexeme(s) {
     lex: while(1) {
         scanner_skip_white(s);
-        if(scanner_peek(s) == eof) {
+        if((peek = scanner_peek(s)) == eof) {
             return new_lexeme(token_eof);
-        } else if(scanner_is_str(s, "//")) {
-            while(scanner_peek(s) != '\n') {
-                if(scanner_peek(s) == eof) {
-                    return new_lexeme(token_eof);
-                };
-                scanner_next(s);
-            };
-
+        } else if(peek == '/') {
             scanner_next(s);
-            continue lex;
-        } else if(scanner_is_str(s, "/*")) {
-            while(!scanner_is_str(s, "*/")) {
-                if(scanner_next(s) == eof) {
-                    return new_lexeme(token_err);
+
+            if((peek = scanner_peek(s)) == eof) {
+                return new_lexeme(token_err);
+            };
+
+            if(peek == '/') {
+                while(scanner_peek(s) != '\n') {
+                    if(scanner_peek(s) == eof) {
+                        return new_lexeme(token_eof);
+                    };
+                    scanner_next(s);
                 };
+
+                scanner_next(s);
+                continue lex;
+            } else if(peek == '*') {
+                scanner_next(s);
+                last = -1;
+                while(1) {
+                    peek = scanner_peek(s);
+                    if(peek == eof) {
+                        return new_lexeme(token_eof);
+                    };
+
+                    if(last == '*' & peek == '/') {
+                        scanner_next(s);
+                        continue lex;
+                    };
+
+                    last = scanner_next(s);
+                };
+            } else {
+                return new_lexeme(token_slash);
             };
-
-            continue lex;
-        } else if(scanner_is_keyword(s, "fn")) {
-            return new_lexeme(token_fn);
-        } else if(scanner_is_keyword(s, "continue")) {
-            return new_lexeme(token_continue);
-        } else if(scanner_is_keyword(s, "const")) {
-            return new_lexeme(token_const);
-        } else if(scanner_is_keyword(s, "return")) {
-            return new_lexeme(token_return);
-        } else if (scanner_is_keyword(s, "break")) {
-            return new_lexeme(token_break);
-        } else if (scanner_is_keyword(s, "if")) {
-            return new_lexeme(token_if);
-        } else if (scanner_is_keyword(s, "else")) {
-            return new_lexeme(token_else);
-        } else if (scanner_is_keyword(s, "while")) {
-            return new_lexeme(token_while);
-        } else if(char_is_ident_start(scanner_peek(s))) {
-            l = new_lexeme(token_ident);
-            l[s_lexeme_data] = new_vec();
-            vec_push(l[s_lexeme_data], scanner_next(s));
-
+        } else if(char_is_ident_start(peek)) {
             while(char_is_ident_continue(scanner_peek(s))) {
-                vec_push(l[s_lexeme_data], scanner_next(s));
+                vec_push(s[s_scanner_word_vec], scanner_next(s));
             };
 
-            return l;
-        } else if(scanner_peek(s) == '(') {
+            if(scanner_is_keyword(s, "fn")) {
+                return new_lexeme(token_fn);
+            } else if(scanner_is_keyword(s, "continue")) {
+                return new_lexeme(token_continue);
+            } else if(scanner_is_keyword(s, "const")) {
+                return new_lexeme(token_const);
+            } else if(scanner_is_keyword(s, "return")) {
+                return new_lexeme(token_return);
+            } else if (scanner_is_keyword(s, "break")) {
+                return new_lexeme(token_break);
+            } else if (scanner_is_keyword(s, "if")) {
+                return new_lexeme(token_if);
+            } else if (scanner_is_keyword(s, "else")) {
+                return new_lexeme(token_else);
+            } else if (scanner_is_keyword(s, "while")) {
+                return new_lexeme(token_while);
+            } else {
+                l = new_lexeme(token_ident);
+                l[s_lexeme_data] = vec_clone(s[s_scanner_word_vec]);
+                s[s_scanner_word_vec][s_vec_count] = 0;
+                return l;
+            };
+        } else if(peek == '(') {
             scanner_next(s);
             return new_lexeme(token_open_brace);
-        } else if(scanner_peek(s) == ')') {
+        } else if(peek == ')') {
             scanner_next(s);
             return new_lexeme(token_close_brace);
-        } else if(scanner_peek(s) == ',') {
+        } else if(peek == ',') {
             scanner_next(s);
             return new_lexeme(token_comma);
-        } else if(scanner_peek(s) == '{') {
+        } else if(peek == '{') {
             scanner_next(s);
             return new_lexeme(token_open_curly);
-        } else if(scanner_peek(s) == '}') {
+        } else if(peek == '}') {
             scanner_next(s);
             return new_lexeme(token_close_curly);
-        } else if(scanner_peek(s) == ';') {
+        } else if(peek == ';') {
             scanner_next(s);
             return new_lexeme(token_semicolon);
-        } else if(scanner_peek(s) == ':') {
+        } else if(peek == ':') {
             scanner_next(s);
             return new_lexeme(token_colon);
-        } else if(scanner_peek(s) == '[') {
+        } else if(peek == '[') {
             scanner_next(s);
             return new_lexeme(token_open_square);
-        } else if(scanner_peek(s) == ']') {
+        } else if(peek == ']') {
             scanner_next(s);
             return new_lexeme(token_close_square);
-        } else if(scanner_peek(s) == '\'') {
+        } else if(peek == '\'') {
             scanner_next(s);
             l = new_lexeme(token_literal);
 
@@ -369,9 +377,9 @@ fn scanner_next_lexeme(s) {
             };
 
             return l;
-        } else if(scanner_peek(s) >= '0' & scanner_peek(s) <= '9') {
+        } else if(peek >= '0' & peek <= '9') {
             num = 0;
-            c = scanner_peek(s);
+            c = peek;
             while(c >= '0' & c <= '9') {
                 scanner_next(s);
                 num = num * 10 + c - '0';
@@ -380,7 +388,7 @@ fn scanner_next_lexeme(s) {
             l = new_lexeme(token_literal);
             l[s_lexeme_data] = num;
             return l;
-        } else if(scanner_peek(s) == '"') {
+        } else if(peek == '"') {
             scanner_next(s);
             l = new_lexeme(token_string);
             l[s_lexeme_data] = new_vec();
@@ -401,7 +409,7 @@ fn scanner_next_lexeme(s) {
             scanner_next(s);
 
             return l;
-        } else if(scanner_peek(s) == '!') {
+        } else if(peek == '!') {
             scanner_next(s);
             c = scanner_peek(s);
 
@@ -411,7 +419,7 @@ fn scanner_next_lexeme(s) {
             } else {
                 return new_lexeme(token_exclamation_point);
             };
-        } else if(scanner_peek(s) == '=') {
+        } else if(peek == '=') {
             scanner_next(s);
             c = scanner_peek(s);
 
@@ -421,7 +429,7 @@ fn scanner_next_lexeme(s) {
             } else {
                 return new_lexeme(token_equal_sign);
             };
-        } else if(scanner_peek(s) == '<') {
+        } else if(peek == '<') {
             scanner_next(s);
             c = scanner_peek(s);
 
@@ -431,7 +439,7 @@ fn scanner_next_lexeme(s) {
             } else {
                 return new_lexeme(token_less_than_sign);
             };
-        } else if(scanner_peek(s) == '>') {
+        } else if(peek == '>') {
             scanner_next(s);
             c = scanner_peek(s);
 
@@ -441,31 +449,28 @@ fn scanner_next_lexeme(s) {
             } else {
                 return new_lexeme(token_greater_than_sign);
             };
-        } else if(scanner_peek(s) == '~') {
+        } else if(peek == '~') {
             scanner_next(s);
             return new_lexeme(token_tilde);
-        } else if(scanner_peek(s) == '|') {
+        } else if(peek == '|') {
             scanner_next(s);
             return new_lexeme(token_or_sign);
-        } else if(scanner_peek(s) == '&') {
+        } else if(peek == '&') {
             scanner_next(s);
             return new_lexeme(token_and_sign);
-        } else if(scanner_peek(s) == '^') {
+        } else if(peek == '^') {
             scanner_next(s);
             return new_lexeme(token_caret);
-        } else if(scanner_peek(s) == '+') {
+        } else if(peek == '+') {
             scanner_next(s);
             return new_lexeme(token_plus_sign);
-        } else if(scanner_peek(s) == '-') {
+        } else if(peek == '-') {
             scanner_next(s);
             return new_lexeme(token_minus_sign);
-        } else if(scanner_peek(s) == '*') {
+        } else if(peek == '*') {
             scanner_next(s);
             return new_lexeme(token_asterisk);
-        } else if(scanner_peek(s) == '/') {
-            scanner_next(s);
-            return new_lexeme(token_slash);
-        } else if(scanner_peek(s) == '%') {
+        } else if(peek == '%') {
             scanner_next(s);
             return new_lexeme(token_percent_sign);
         };
@@ -1479,6 +1484,7 @@ fn parser_parse_function_params(p) {
     while(1) {
         comma_or_close_brace = parser_next(p);
         if(comma_or_close_brace == eof) {
+            function_params_free(params);
             return parser_parse_fail;
         } else if(comma_or_close_brace[s_lexeme_token] == token_close_brace) {
             return params;
@@ -1673,6 +1679,17 @@ fn add_unique_vec(vec, vecs) {
     return vecs[s_vec_count] - 1;
 }
 
+// returns index of vec in vecs
+fn add_unique_vec_non_owning(vec, vecs) {
+    if((idx = vec_index_vec(vec, vecs)) != -1) {
+        return idx;
+    };
+
+    vec_push(vecs, vec);
+
+    return vecs[s_vec_count] - 1;
+}
+
 fn constant_values(functions_and_constants, strings) {
     constants = new_vec();
     i = 0;
@@ -1791,7 +1808,7 @@ fn prepass_expression(pr, expr, current_intermediate_count) {
         if(constants_get_constant_value(pr[s_prepass_result_constant_values], ident)) {
             return 0;
         };
-        add_unique_vec(ident, pr[s_prepass_result_vars]);
+        add_unique_vec_non_owning(ident, pr[s_prepass_result_vars]);
     } else if(expr_kind == expression_function_call) {
         args = expr[s_expression_data][s_expression_function_call_arg_vec];
         i = 0;
@@ -1805,7 +1822,7 @@ fn prepass_expression(pr, expr, current_intermediate_count) {
     } else if(expr_kind == expression_unary_expression) {
         prepass_expression(pr, expr[s_expression_data][s_expression_unary_operation_operand], current_intermediate_count);
     } else if(expr_kind == expression_string) {
-        add_unique_vec(expr[s_expression_data][s_expression_string_string], pr[s_prepass_result_unique_strings]);
+        add_unique_vec_non_owning(expr[s_expression_data][s_expression_string_string], pr[s_prepass_result_unique_strings]);
     };
 
     return 0;
@@ -1985,12 +2002,6 @@ fn codegen_function_get_var(cgf, var) {
     };
 
     // we should never get here since the pre pass get's all used variables
-    return 0;
-}
-
-fn codegen_function_generate_binary_expression(cgf, first, second, instr) {
-    write_str(instr);
-
     return 0;
 }
 
