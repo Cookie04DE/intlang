@@ -83,7 +83,7 @@ See [`examples/`](https://github.com/Cookie04DE/intlang/tree/master/examples) fo
 ## Usage
 To use the stage0 compiler, compile the rust binary and run it on one of the examples (or your own program).
 
-`$ intlang calc.il`
+`$ intlang full calc.il`
 
 In case of success there should now be an executable with the same name (but no extension) next to it.
 
@@ -91,7 +91,7 @@ Now you can run it.
 
 `$ ./calc`
 
-To bootstrap the stage2 ilc you can run [`bootstrap.sh`](https://github.com/Cookie04DE/intlang/blob/master/bootstrap.sh).
+To bootstrap further ilc stages you can run [`bootstrap.sh`](https://github.com/Cookie04DE/intlang/blob/master/bootstrap.sh).
 
 `$ ./bootstrap.sh`
 

@@ -297,12 +297,8 @@ struct CodeGen {
     constants: HashMap<String, String>,
 }
 
-pub fn generate_binary(ast: &SourceFile<'_>, target: &Path) {
-    let tmp_dir = TempDir::new().expect("could not create temp dir");
-
-    let asm_file = tmp_dir.path().join("program.asm");
-
-    let mut content = String::new();
+pub fn generate_asm(ast: &SourceFile<'_>) -> String {
+    let mut asm = String::new();
 
     let mut codegen = CodeGen::default();
 
@@ -328,10 +324,10 @@ pub fn generate_binary(ast: &SourceFile<'_>, target: &Path) {
         codegen_function.generate_function(f);
     }
 
-    content.push_str(BUILTIN_DATA);
+    asm.push_str(BUILTIN_DATA);
     for s in &codegen.strings {
         let _ = writeln!(
-            content,
+            asm,
             r"
     intlangstring_{} dq {}",
             s.1,
@@ -341,18 +337,26 @@ pub fn generate_binary(ast: &SourceFile<'_>, target: &Path) {
         );
     }
 
-    content.push_str(BUILTIN_STATIC);
-    content.push_str(BUILTIN_FUNCTIONS);
-    content.push_str(&codegen.content);
-    content.push_str(MAIN);
-    content.push_str(
+    asm.push_str(BUILTIN_STATIC);
+    asm.push_str(BUILTIN_FUNCTIONS);
+    asm.push_str(&codegen.content);
+    asm.push_str(MAIN);
+    asm.push_str(
         r"
     call intlang_main
 ",
     );
-    content.push_str(POSTAMBLE);
+    asm.push_str(POSTAMBLE);
 
-    fs::write(&asm_file, &content).expect("failed writing temp assembly file");
+    asm
+}
+
+pub fn generate_binary(ast: &SourceFile<'_>, target: &Path) {
+    let tmp_dir = TempDir::new().expect("could not create temp dir");
+
+    let asm_file = tmp_dir.path().join("program.asm");
+
+    fs::write(&asm_file, &generate_asm(ast)).expect("failed writing temp assembly file");
 
     run_command(
         Command::new("nasm")
