@@ -5,9 +5,9 @@ Intlang is a toy programming language with C-like syntax and a toy self hosting 
 
 It's only datatype is the 64 bit signed integer.
 
-Contained in this repository is the stage0 intlang compiler that is written in Rust.
+The stage0 intlang compiler is written in Rust and can be found in the [`src` directory](https://github.com/Cookie04DE/intlang/blob/master/src).
 
-The actual self hosting compiler can be found in [`ilc.il`](https://github.com/Cookie04DE/intlang/blob/master/ilc.il).
+For the self hosting compiler see [Stages](#stages).
 
 ## Language structure
 An Intlang program is made of functions with names and optionally parameters as well as constants.
@@ -98,3 +98,15 @@ To bootstrap further ilc stages you can run [`bootstrap.sh`](https://github.com/
 To compile an intlang program with it or any previous stage use [`ilc.sh`](https://github.com/Cookie04DE/intlang/blob/master/ilc.sh).
 
 `$ ./ilc.sh ilc.il`
+
+## Stages
+
+The compilers are separated in stages that are designed to bootstrap each other. The self hosted compilers can be found in the [`ilc_stages` directory](https://github.com/Cookie04DE/intlang/blob/master/ilc_stages).
+
+### Stage 0
+
+The initial Rust compiler.
+
+### Stage 1
+
+The first ilc achieving parity with the Rust version
