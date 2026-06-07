@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compiles all three stages and demonstrates that the output of stage1 and stage2 ilc are the same given the ilc source code
+# Compiles all stages and demonstrates that each stage is a fixed point
 set -euo pipefail
 
 tmpdir="$(mktemp -d)"
